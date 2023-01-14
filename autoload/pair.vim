@@ -8,20 +8,57 @@ if !g:op#no_mappings
     nmap ""; <plug>(pair#next_default_register)
     vmap   ; <plug>(pair#visual_next)
     vmap ""; <plug>(pair#visual_next_default_register)
+    omap   ; <plug>(pair#op_pending_next)
+
     nmap   , <plug>(pair#previous)
     nmap "", <plug>(pair#previous_default_register)
     vmap   , <plug>(pair#visual_previous)
     vmap "", <plug>(pair#visual_previous_default_register)
+    omap   , <plug>(pair#op_pending_previous)
 endif
 
 nmap <silent> <plug>(pair#next) :<c-u>call <sid>PairRepeat(';', v:count, v:register, 'normal')<cr>
 nmap <silent> <plug>(pair#next_default_register) :<c-u>call <sid>PairRepeat(';', v:count, 'use_default', 'normal')<cr>
 vmap <silent> <plug>(pair#visual_next) :<c-u>call <sid>PairRepeat(';', v:count, v:register, 'visual')<cr>
 vmap <silent> <plug>(pair#visual_next_default_register) :<c-u>call <sid>PairRepeat(';', v:count, 'use_default', 'visual')<cr>
+omap <silent><expr> <plug>(pair#op_pending_next) <sid>PairOpPending(';')
+
 nmap <silent> <plug>(pair#previous) :<c-u>call <sid>PairRepeat(',', v:count, v:register, 'normal')<cr>
 nmap <silent> <plug>(pair#previous_default_register) :<c-u>call <sid>PairRepeat(',', v:count, 'use_default', 'normal')<cr>
 vmap <silent> <plug>(pair#visual_previous) :<c-u>call <sid>PairRepeat(',', v:count, v:register, 'visual')<cr>
 vmap <silent> <plug>(pair#visual_previous_default_register) :<c-u>call <sid>PairRepeat(',', v:count, 'use_default', 'visual')<cr>
+omap <silent><expr> <plug>(pair#op_pending_previous) <sid>PairOpPending(',')
+
+noremap <silent> <plug>(op#_noremap_;) ;
+noremap <silent> <plug>(op#_noremap_,) ,
+
+function s:PairOpPending(direction)
+    let l:handle = s:GetHandle('pair')
+    if empty(l:handle) || has_key(l:handle, 'abort')
+        return "\<esc>"
+    else
+        let l:old_id = l:handle['pair_id']
+        let l:id = (a:direction ==# ';')? l:old_id : !l:old_id
+        if l:handle['pair_state'][l:id] ==# 'valid'
+            if mode(1) ==# 'no'
+                let l:op_mode = ( l:handle['cur_start'][1] == l:handle['cur_end'][1] )? '' : 'V'
+            else
+                let l:op_mode = a:handle['entry_mode'][2]
+            endif
+            return l:op_mode.l:handle['pair'][l:id]
+        else
+            execute "let l:stack = ".op#SID()."StartStack()"
+            call extend(l:stack, { 'name': 'pair', 'expr': l:handle['pair'][l:id], 'pair': deepcopy(l:handle['pair']) })
+            call extend(l:stack, { 'accepts_count': l:handle['accepts_count'], 'accepts_register': l:handle['accepts_register'] })
+            call extend(l:stack, { 'shift_marks': l:handle['shift_marks'], 'visual_motion': l:handle['visual_motion'] })
+            call extend(l:stack, { 'input_cache': get(l:handle, 'input_cache', []), 'input_source': 'input_cache', 'pair_id': l:id })
+            call extend(l:stack, { 'pair_state': l:handle['pair_state'], 'expr_so_far': '', 'register_default': l:handle['register_default'] })
+            call extend(l:stack, { 'cur_start': getcurpos() })
+            call extend(l:stack, { 'called_from': 'repeat initialization', 'operator': v:operator, 'entry_mode': mode(1), 'count1': 1 })
+            return "\<esc>:call ".op#SID()."Callback(".string('').', '.string('stack').")\<cr>"
+        endif
+    endif
+endfunction
 
 function pair#NoremapNext(pair, ...) abort range
     return s:Pair(a:pair, 1, 0, a:000)
@@ -51,7 +88,7 @@ endfunction
 
 function s:SetMap(mode, pair, args) abort
     let l:args = ''
-    for l:arg in a:000
+    for l:arg in a:args
         let l:args .= ', '.(type(l:arg) =~# '\v^[06]$'? l:arg : string(l:arg))
     endfor
     let l:map_func = ['pair#MapNext', 'pair#MapPrevious']
@@ -63,7 +100,9 @@ function s:SetMap(mode, pair, args) abort
         for l:id in range(2)
             if l:noremap || empty(maparg(a:pair[l:id], l:mode))
                 let l:plugpair[l:id] = '<plug>(op#_noremap_'.a:pair[l:id].')'
-                let l:create_plugmap[l:id] = 'noremap '.l:plugpair[l:id].' '.a:pair[l:id]
+                if a:pair[l:id] !~# '\v^[fFtT]$'    " see workaround_f
+                    let l:create_plugmap[l:id] = 'noremap <silent> '.l:plugpair[l:id].' '.a:pair[l:id]
+                endif
             else
                 let l:plugpair[l:id] = '<plug>(op#_'.l:mode.'map_'.a:pair[l:id].')'
                 let l:mapinfo = maparg(a:pair[l:id], l:mode, 0, 1)
@@ -94,7 +133,7 @@ function s:Pair(pair, noremap, id, args) abort range
         execute 'noremap <plug>(op#_noremap_'.a:pair[1].') '.a:pair[1]
     endif
     let l:pair = a:noremap? [ "\<plug>(op#_noremap_".a:pair[0].')', "\<plug>(op#_noremap_".a:pair[1].')' ] : a:pair
-    return s:InitCallback('pair', 'map', l:pair, a:id, (len(a:args)>=1? !empty(a:args[0]) : 0), (len(a:args)>=2? !empty(a:args[1]) : 1), (len(a:args)>=3? !empty(a:args[2]) : 0), (len(a:args)>=4? !empty(a:args[3]) : 0), (len(a:args)>=5? !empty(a:args[4]) : !empty(g:op#operators_consume_typeahead)))
+    return s:InitCallback('pair', a:id, l:pair, (len(a:args)>=1? !empty(a:args[0]) : 0), (len(a:args)>=2? !empty(a:args[1]) : 1), (len(a:args)>=3? !empty(a:args[2]) : 0), (len(a:args)>=4? !empty(a:args[3]) : 0), (len(a:args)>=5? !empty(a:args[4]) : !empty(g:op#operators_consume_typeahead)))
 endfunction
 
 function s:PairRepeat(direction, count, register, mode) abort
@@ -102,42 +141,36 @@ function s:PairRepeat(direction, count, register, mode) abort
     if has_key(l:handle, 'abort') || empty(l:handle)
         return
     endif
-
-    let l:init_id = l:handle['pair_init_id']
-    let l:other_id = !l:init_id
-    if l:handle['pair_state'][l:init_id] ==# 'invalid'
-        let l:handle['pair'][l:init_id] = l:handle['expr']
-        let l:handle['pair_state'][l:init_id] = 'valid'
+    if l:handle['expr'] =~# '\V\^'."\<plug>".'(op#_noremap_\[fFtT;,])'
+        " workaround for cpo-;
+        let l:handle['expr'] = (a:direction ==# ';')? "\<plug>(op#_noremap_;)" : "\<plug>(op#_noremap_,)"
+        call s:InitRepeat(l:handle, a:count, a:register, a:mode)
+        call s:Callback('', 'pair')
+        return
     endif
 
-    call inputsave()
-    if a:direction ==# ';'
-        let l:handle['expr'] = l:handle['pair'][l:init_id]
+    let l:old_id = l:handle['pair_id']
+    let l:id = (a:direction ==# ';')? l:old_id : !l:old_id
+    if l:handle['pair_state'][l:id] ==# 'valid'
+        call extend(l:handle, {'pair_id': l:id, 'expr': l:handle['pair'][l:id]})
         call s:InitRepeat(l:handle, a:count, a:register, a:mode)
         call s:Callback('', 'pair')
-    elseif a:direction ==# ',' && l:handle['pair_state'][l:other_id] ==# 'valid'
-        let l:handle['expr'] = l:handle['pair'][l:other_id]
-        call s:InitRepeat(l:handle, a:count, a:register, a:mode)
-        call s:Callback('', 'pair')
-    elseif a:direction ==# ',' && l:handle['pair_state'][l:other_id] ==# 'invalid'
+        let l:handle['pair_id'] = l:old_id
+    else
         execute "let l:stack = ".op#SID()."StartStack()"
-        for l:key in keys(l:handle)
-            let l:stack[l:key] = deepcopy(l:handle[l:key])
-        endfor
-        call extend(l:stack, { 'expr': l:handle['pair'][l:other_id], 'expr_so_far': '', 'input_source': 'input_cache' })
+        call extend(l:stack, { 'name': 'pair', 'expr': l:handle['pair'][l:id], 'pair': deepcopy(l:handle['pair']) })
+        call extend(l:stack, { 'accepts_count': l:handle['accepts_count'], 'accepts_register': l:handle['accepts_register'] })
+        call extend(l:stack, { 'shift_marks': l:handle['shift_marks'], 'visual_motion': l:handle['visual_motion'] })
+        call extend(l:stack, { 'input_cache': get(l:handle, 'input_cache', []), 'input_source': 'input_cache', 'pair_id': l:id })
+        call extend(l:stack, { 'pair_state': l:handle['pair_state'], 'expr_so_far': '', 'register_default': l:handle['register_default'] })
         call s:InitRepeat(l:stack, a:count, a:register, a:mode)
-        call extend(l:stack, { 'called_from': 'pair initialization' })
+        call extend(l:stack, { 'called_from': 'repeat initialization' })
         call s:Callback('', 'stack')
-        let l:new = s:GetHandle('pair')
-        let l:new['pair_state'] = ['valid', 'valid']
-        let l:new['pair'][l:other_id] = l:new['expr']
-        let l:new['pair'][!l:other_id] = l:handle['expr']
     endif
-    call inputrestore()
 endfunction
 
-function s:InitCallback(name, type, expr, id, accepts_count, accepts_register, shift_marks, stay_in_visual, input_source) abort
-    execute "return ".op#SID()."InitCallback(a:name, a:type, a:expr, a:id, a:accepts_count, a:accepts_register, a:shift_marks, a:stay_in_visual, a:input_source)"
+function s:InitCallback(name, expr, pair, accepts_count, accepts_register, shift_marks, visual_motion, input_source) abort
+    execute "return ".op#SID()."InitCallback(a:name, a:expr, a:pair, a:accepts_count, a:accepts_register, a:shift_marks, a:visual_motion, a:input_source)"
 endfunction
 
 function s:Callback(dummy, name) abort

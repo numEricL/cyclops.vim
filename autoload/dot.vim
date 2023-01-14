@@ -8,22 +8,33 @@ if !g:op#no_mappings
     nmap "". <plug>(dot#dot_default_register)
     vmap   . <plug>(dot#visual_dot)
     vmap "". <plug>(dot#visual_dot_default_register)
+    omap   . <plug>(dot#op_pending_dot)
 endif
 
 nmap <silent> <plug>(dot#dot) :<c-u>call <sid>DotRepeat(v:count, v:register, 'normal')<cr>
 nmap <silent> <plug>(dot#dot_default_register) :<c-u>call <sid>DotRepeat(v:count, 'use_default', 'normal')<cr>
 vmap <silent> <plug>(dot#visual_dot) :<c-u>call <sid>DotRepeat(v:count, v:register, 'visual')<cr>
 vmap <silent> <plug>(dot#visual_dot_default_register) :<c-u>call <sid>DotRepeat(v:count, 'use_default', 'visual')<cr>
+omap <silent><expr> <plug>(dot#op_pending_dot) <sid>DotOpPending()
+
+function s:DotOpPending()
+    let l:handle = s:GetHandle('dot')
+    if  !empty(l:handle) && !has_key(l:handle, 'abort') && has_key(l:handle, 'input_cache')
+        return l:handle['input_cache'][0]
+    else
+        return "\<esc>"
+    endif
+endfunction
 
 function dot#Map(map, ...) abort range
-    return s:InitCallback('dot', 'map', a:map, 0, (a:0>=1? !empty(a:1) : 0), (a:0>=2? !empty(a:2) : 1), (a:0>=3? !empty(a:3) : 0), (a:0>=4? !empty(a:4) : 0), (a:0>=5? !empty(a:5) : !empty(g:op#operators_consume_typeahead)))
+    return s:InitCallback('dot', a:map, 0, (a:0>=1? !empty(a:1) : 0), (a:0>=2? !empty(a:2) : 1), (a:0>=3? !empty(a:3) : 0), (a:0>=4? !empty(a:4) : 0), (a:0>=5? !empty(a:5) : !empty(g:op#operators_consume_typeahead)))
 endfunction
 
 function dot#Noremap(map, ...) abort range
     if empty(maparg('<plug>(op#_noremap_'.a:map.')'))
         execute 'noremap <plug>(op#_noremap_'.a:map.') '.a:map
     endif
-    return s:InitCallback('dot', 'map', "\<plug>(op#_noremap_".a:map.")", 0, (a:0>=1? !empty(a:1) : 0), (a:0>=2? !empty(a:2) : 1), (a:0>=3? !empty(a:3) : 0), (a:0>=4? !empty(a:4) : 0), (a:0>=5? !empty(a:5) : !empty(g:op#operators_consume_typeahead)))
+    return s:InitCallback('dot', "\<plug>(op#_noremap_".a:map.")", 0, (a:0>=1? !empty(a:1) : 0), (a:0>=2? !empty(a:2) : 1), (a:0>=3? !empty(a:3) : 0), (a:0>=4? !empty(a:4) : 0), (a:0>=5? !empty(a:5) : !empty(g:op#operators_consume_typeahead)))
 endfunction
 
 function dot#SetMaps(mode, maps, ...) abort range
@@ -57,7 +68,9 @@ function s:SetMap(mode, map, args) abort
         let l:create_plugmap = ''
         if l:noremap || empty(maparg(a:map, l:mode))
             let l:plugmap = '<plug>(op#_noremap_'.a:map.')'
-            let l:create_plugmap = 'noremap '.l:plugmap.' '.a:map
+            if a:map !~# '\v^[fFtT]$'   " see workaround_f
+                let l:create_plugmap = 'noremap <silent> '.l:plugmap.' '.a:map
+            endif
         else
             let l:plugmap = '<plug>(op#_'.l:mode.'map_'.a:map.')'
             let l:mapinfo = maparg(a:map, l:mode, 0, 1)
@@ -76,8 +89,8 @@ function s:SetMap(mode, map, args) abort
     endfor
 endfunction
 
-function s:InitCallback(name, type, expr, id, accepts_count, accepts_register, shift_marks, stay_in_visual, input_source) abort
-    execute "return ".op#SID()."InitCallback(a:name, a:type, a:expr, a:id, a:accepts_count, a:accepts_register, a:shift_marks, a:stay_in_visual, a:input_source)"
+function s:InitCallback(name, expr, id, accepts_count, accepts_register, shift_marks, visual_motion, input_source) abort
+    execute "return ".op#SID()."InitCallback(a:name, a:expr, a:id, a:accepts_count, a:accepts_register, a:shift_marks, a:visual_motion, a:input_source)"
 endfunction
 
 function s:GetHandle(name) abort

@@ -7,6 +7,7 @@ Uses:
 
 * add dot repeating to virtually any map
 * add pair repeating with `;` and `,`
+* add dot and pair operator pending mode
 * repeat while in visual mode
 * use count and registers while repeating
 * `Backspace` out of typos while in operator-pending mode
@@ -20,6 +21,7 @@ limitations:
 * only works with maps that change the buffer
 * only works with movement mappings or non-operators
 * no support for visual mode
+* doesn't have other goodies!
 * difficult to configure
 * cannot be nested
 * relies on constantly repeating autocommands or macro recording
@@ -41,7 +43,14 @@ xmap <expr> s   dot#Map('<Plug>VSurround')
 xmap <expr> gs  dot#Map('<Plug>VgSurround')
 ```
 
-Add repeat functionality with `;` `,` to window resizing:
+Extend dot `d`
+```vim
+call dot#('nnoremap', ['d'])
+diw
+y.  # same as yiw
+```
+
+Add pair repeat functionality with `;` `,` to window resizing:
 ``` vim
 call pair#SetMaps('noremap', [['<c-w>>', '<c-w><'], ['<c-w>+', '<c-w>-']] )
 ```
