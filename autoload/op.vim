@@ -204,6 +204,7 @@ function s:HijackInput(handle) abort
                 if s:workaround_f
                     " Problem: feedkeys('dfa×') ends in operator pending mode
                     " Workaround: break out of loop early if any of [fFtT] is used
+                    let a:handle['hijack_mode'] = 'n'
                     let s:workaround_f = 0
                     break
                 endif
@@ -230,6 +231,7 @@ function s:HijackInput(handle) abort
             let a:handle['expr'] = l:expr.a:handle['hijack_stream']
             call s:ExecuteHijack(a:handle)
         endif
+        let s:workaround_f = 0
 
         if !empty(a:handle['hijack_stream'])
             let l:root = s:GetRootHandle()
