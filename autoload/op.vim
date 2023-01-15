@@ -45,22 +45,43 @@ function op#PrintScriptVars() abort range
 endfunction
 
 function op#Map(map, ...) abort range
-    return s:InitCallback('norepeat', a:map, 0, (a:0>=1? !empty(a:1) : 0), (a:0>=2? !empty(a:2) : 1), (a:0>=3? !empty(a:3) : 0), (a:0>=4? !empty(a:4) : 0), (a:0>=5? !empty(a:5) : !empty(g:op#operators_consume_typeahead)))
+    return s:InitCallback('norepeat', a:map, 0, s:CheckOpts(a:000))
+endfunction
+
+function s:CheckOpts(opts)
+    if len(a:opts) > 1 || ( len(a:opts) == 1 && type(a:opts[0]) != v:t_dict )
+        throw 'cyclops.vim: Incorrect parameter, only a dictionary of options is accepted.'
+    endif
+    let l:opts = {'accepts_count': 0, 'accepts_register': 1, 'shift_marks': 0, 'visual_motion': 0, 'operators_consume_typeahead': !empty(g:op#operators_consume_typeahead) }
+    if len(a:opts)
+        for [l:key, l:value] in items(a:opts[0])
+            if l:key !~# '\v^(accepts_count|accepts_register|shift_marks|visual_motion|operators_consume_typeahead)$'
+                throw 'cyclops.vim: Unrecognized option '.string(l:key).'.'
+            endif
+            if l:value != v:true && l:value != v:false
+                throw 'cyclops.vim: Unrecognied option value '.string(l:key).': '.string(l:value).'. Values must be 0 or 1.'
+            endif
+            let l:opts[l:key] = l:value
+        endfor
+    endif
+    return l:opts
 endfunction
 
 function op#Noremap(map, ...) abort range
     if empty(maparg('<plug>(op#_noremap_'.a:map.')'))
         execute 'noremap <plug>(op#_noremap_'.a:map.') '.a:map
     endif
-    return s:InitCallback('norepeat', "\<plug>(op#_noremap_".a:map.")", 0, (a:0>=1? !empty(a:1) : 0), (a:0>=2? !empty(a:2) : 1), (a:0>=3? !empty(a:3) : 0), (a:0>=4? !empty(a:4) : 0), (a:0>=5? !empty(a:5) : !empty(g:op#operators_consume_typeahead)))
+    return s:InitCallback('norepeat', "\<plug>(op#_noremap_".a:map.")", 0, s:CheckOpts(a:000))
 endfunction
 
-function s:InitCallback(name, expr, pair, accepts_count, accepts_register, shift_marks, visual_motion, input_source) abort
+function s:InitCallback(name, expr, pair, opts) abort
     let l:handle = s:StartStack()
-    call extend(l:handle, { 'name': a:name, 'expr': a:expr, 'expr_so_far': '', 'input_source': (a:input_source? 'typeahead': 'user') })
-    call extend(l:handle, { 'shift_marks': a:shift_marks, 'accepts_count': a:accepts_count, 'accepts_register' : a:accepts_register })
+    for [l:key, l:value] in items(a:opts)
+        let l:handle[l:key] = l:value
+    endfor
+    call extend(l:handle, { 'input_source': (a:opts['operators_consume_typeahead']? 'typeahead': 'user') })
+    call extend(l:handle, { 'name': a:name, 'expr': a:expr, 'expr_so_far': '', 'called_from': 'initialization' })
     call extend(l:handle, { 'entry_mode': mode(1), 'cur_start': getcurpos(), 'count1': v:count1, 'register': v:register })
-    call extend(l:handle, { 'visual_motion': a:visual_motion, 'called_from': 'initialization' })
     if l:handle['name'] ==# 'pair'
         call extend(l:handle, { 'expr': a:pair[a:expr], 'pair': a:pair, 'pair_id': a:expr, 'pair_state': ['invalid', 'invalid'] })
     endif
@@ -164,53 +185,61 @@ endfunction
 
 function s:HijackInput(handle) abort
     call extend(a:handle, { 'hijack_mode': 'no', 'hijack_stream': '' })
-    call s:UpdateHijackStream(a:handle, char2nr(get(a:handle, 'ambiguous_map', '')))
+    for l:char in split(get(a:handle, 'ambiguous_map', ''), '\zs')
+        call s:UpdateHijackStream(a:handle, char2nr(l:char))
+    endfor
     let [ l:expr, l:state ] = [ a:handle['expr'], s:SaveState(a:handle) ]
     let a:handle['expr'] = l:expr.a:handle['hijack_stream']
     call s:ExecuteHijack(a:handle)
     if a:handle['input_source'] ==# 'input_cache' && a:handle['hijack_mode'] =~# '\v^(no.=|i|c)$'
         let a:handle['expr'] = l:expr .. remove(a:handle['input_cache'], 0)
         return
-    elseif a:handle['hijack_mode'] =~# '\m^no'
-        while a:handle['hijack_mode'] =~# '\m^no'
-            call s:UpdateHijackStream(a:handle, s:GetChar(a:handle))
-            let a:handle['expr'] = l:expr.a:handle['hijack_stream']
-            if s:workaround_f
-                " Problem: feedkeys('dfa×') ends in operator pending mode
-                " Workaround: break out of loop early if any of [fFtT] is used
-                let s:workaround_f = 0
-                break
-            endif
-            call s:RestoreState(a:handle, l:state)
-            call s:ExecuteHijack(a:handle)
-        endwhile
-    elseif a:handle['hijack_mode'] ==# 'i'
-        let l:char = s:UpdateHijackStream(a:handle, s:GetChar(a:handle))
-        execute "normal! a".l:char
-        while l:char != "\<esc>"
+    endif
+
+    while a:handle['hijack_mode'] =~# '\v^(no[vV]=|i|c)$'
+        if a:handle['hijack_mode'] =~# '\m^no'
+            while a:handle['hijack_mode'] =~# '\m^no'
+                call s:UpdateHijackStream(a:handle, s:GetChar(a:handle))
+                let a:handle['expr'] = l:expr.a:handle['hijack_stream']
+                if s:workaround_f
+                    " Problem: feedkeys('dfa×') ends in operator pending mode
+                    " Workaround: break out of loop early if any of [fFtT] is used
+                    let s:workaround_f = 0
+                    break
+                endif
+                call s:RestoreState(a:handle, l:state)
+                call s:ExecuteHijack(a:handle)
+            endwhile
+        elseif a:handle['hijack_mode'] ==# 'i'
             let l:char = s:UpdateHijackStream(a:handle, s:GetChar(a:handle))
             execute "normal! a".l:char
-        endwhile
-        let a:handle['expr'] = l:expr.a:handle['hijack_stream']
-        call s:ExecuteHijack(a:handle)
-    elseif a:handle['hijack_mode'] ==# 'c' || a:handle['hijack_cmd_type'] =~# '\v^[:/?]$'
-        call s:RestoreState(a:handle, l:state)
-        call extend(a:handle, { 'hijack_cmd': s:hijack_cmd, 'hijack_cmd_type': s:hijack_cmd_type })
-        let l:char = s:UpdateHijackStream(a:handle, s:GetChar(a:handle))
-        while l:char != "\<cr>"
+            while l:char != "\<esc>"
+                let l:char = s:UpdateHijackStream(a:handle, s:GetChar(a:handle))
+                execute "normal! a".l:char
+            endwhile
+            let a:handle['expr'] = l:expr.a:handle['hijack_stream']
+            call s:ExecuteHijack(a:handle)
+        elseif a:handle['hijack_mode'] ==# 'c' || a:handle['hijack_cmd_type'] =~# '\v^[:/?]$'
+            call s:RestoreState(a:handle, l:state)
+            call extend(a:handle, { 'hijack_cmd': s:hijack_cmd, 'hijack_cmd_type': s:hijack_cmd_type })
             let l:char = s:UpdateHijackStream(a:handle, s:GetChar(a:handle))
-        endwhile
-        call setpos('.', a:handle['cur_start'])
-        let a:handle['expr'] = l:expr.a:handle['hijack_stream']
-        call s:ExecuteHijack(a:handle)
-    endif
-    if !empty(a:handle['hijack_stream'])
-        let l:root = s:GetRootHandle()
-        if !has_key(l:root, 'input_cache')
-            call extend(l:root, {'input_cache': []})
+            while l:char != "\<cr>"
+                let l:char = s:UpdateHijackStream(a:handle, s:GetChar(a:handle))
+            endwhile
+            call setpos('.', a:handle['cur_start'])
+            let a:handle['expr'] = l:expr.a:handle['hijack_stream']
+            call s:ExecuteHijack(a:handle)
         endif
-        call add(l:root['input_cache'], a:handle['hijack_stream'])
-    endif
+
+        if !empty(a:handle['hijack_stream'])
+            let l:root = s:GetRootHandle()
+            if !has_key(l:root, 'input_cache')
+                call extend(l:root, {'input_cache': []})
+            endif
+            call add(l:root['input_cache'], a:handle['hijack_stream'])
+        endif
+    endwhile
+
     call s:RestoreState(a:handle, l:state)
 endfunction
 
@@ -521,7 +550,7 @@ endfunction
 
 function s:ExprWithModifiers(handle) abort
     let a:handle['expr_with_modifiers'] = a:handle['expr']
-    if a:handle['accepts_register'] && a:handle['register'] != a:handle['register_default']
+    if a:handle['accepts_register'] && get(a:handle, 'register', a:handle['register_default']) != a:handle['register_default']
         let a:handle['expr_with_modifiers'] = a:handle['expr_with_modifiers'] a:handle['register']
     endif
     if a:handle['accepts_count'] && a:handle['count1'] != 1
@@ -563,7 +592,6 @@ endfunction
 function s:StoreRepeatFrame(handle) abort
     if has_key(a:handle, 'abort')
         unlet! s:hijack_cmd s:hijack_cmd_type s:hijack_mode
-        call s:PopStack()
         return
     endif
 
@@ -584,7 +612,7 @@ function s:StoreRepeatFrame(handle) abort
             silent! execute "normal! \<esc>"
             call winrestview(l:win)
         elseif l:mode !~# '\v^[vV]$'
-            throw 'cyclops.vim: Exit mode '.string(l:mode).' not yet supported. Please make a request at https://github.com/numericl/cyclops.vim/issues'
+            throw 'cyclops.vim: Unexepcted exit mode'
         endif
 
         if a:handle['called_from'] =~# 'initialization'

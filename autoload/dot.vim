@@ -17,24 +17,15 @@ vmap <silent> <plug>(dot#visual_dot) :<c-u>call <sid>DotRepeat(v:count, v:regist
 vmap <silent> <plug>(dot#visual_dot_default_register) :<c-u>call <sid>DotRepeat(v:count, 'use_default', 'visual')<cr>
 omap <silent><expr> <plug>(dot#op_pending_dot) <sid>DotOpPending()
 
-function s:DotOpPending()
-    let l:handle = s:GetHandle('dot')
-    if  !empty(l:handle) && !has_key(l:handle, 'abort') && has_key(l:handle, 'input_cache')
-        return l:handle['input_cache'][0]
-    else
-        return "\<esc>"
-    endif
-endfunction
-
 function dot#Map(map, ...) abort range
-    return s:InitCallback('dot', a:map, 0, (a:0>=1? !empty(a:1) : 0), (a:0>=2? !empty(a:2) : 1), (a:0>=3? !empty(a:3) : 0), (a:0>=4? !empty(a:4) : 0), (a:0>=5? !empty(a:5) : !empty(g:op#operators_consume_typeahead)))
+    return s:InitCallback('dot', a:map, 0, s:CheckOpts(a:000))
 endfunction
 
 function dot#Noremap(map, ...) abort range
     if empty(maparg('<plug>(op#_noremap_'.a:map.')'))
         execute 'noremap <plug>(op#_noremap_'.a:map.') '.a:map
     endif
-    return s:InitCallback('dot', "\<plug>(op#_noremap_".a:map.")", 0, (a:0>=1? !empty(a:1) : 0), (a:0>=2? !empty(a:2) : 1), (a:0>=3? !empty(a:3) : 0), (a:0>=4? !empty(a:4) : 0), (a:0>=5? !empty(a:5) : !empty(g:op#operators_consume_typeahead)))
+    return s:InitCallback('dot', "\<plug>(op#_noremap_".a:map.")", 0, s:CheckOpts(a:000))
 endfunction
 
 function dot#SetMaps(mode, maps, ...) abort range
@@ -47,12 +38,25 @@ function dot#SetMaps(mode, maps, ...) abort range
     endif
 endfunction
 
+function s:CheckOpts(opts) abort
+    execute "return ".op#SID()."CheckOpts(a:opts)"
+endfunction
+
 function s:DotRepeat(count, register, mode) abort
     let l:handle = s:GetHandle('dot')
     if  !empty(l:handle) && !has_key(l:handle, 'abort')
         call s:InitRepeat(l:handle, a:count, a:register, a:mode)
     endif
     execute "normal! ."
+endfunction
+
+function s:DotOpPending()
+    let l:handle = s:GetHandle('dot')
+    if  !empty(l:handle) && !has_key(l:handle, 'abort') && has_key(l:handle, 'input_cache')
+        return l:handle['input_cache'][0]
+    else
+        return "\<esc>"
+    endif
 endfunction
 
 function s:SetMap(mode, map, args) abort
@@ -89,8 +93,8 @@ function s:SetMap(mode, map, args) abort
     endfor
 endfunction
 
-function s:InitCallback(name, expr, id, accepts_count, accepts_register, shift_marks, visual_motion, input_source) abort
-    execute "return ".op#SID()."InitCallback(a:name, a:expr, a:id, a:accepts_count, a:accepts_register, a:shift_marks, a:visual_motion, a:input_source)"
+function s:InitCallback(name, expr, pair, opts) abort
+    execute "return ".op#SID()."InitCallback(a:name, a:expr, a:pair, a:opts)"
 endfunction
 
 function s:GetHandle(name) abort

@@ -47,7 +47,7 @@ Extend dot `d`
 ```vim
 call dot#('nnoremap', ['d'])
 diw
-y.  # same as yiw
+c.  # same as ciw
 ```
 
 Add pair repeat functionality with `;` `,` to window resizing:
