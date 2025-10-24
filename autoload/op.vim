@@ -111,7 +111,6 @@ function s:InitCallback(op_type, expr, pair, opts) abort
 endfunction
 
 function s:Callback(dummy, ...) abort range
-
     if a:0
         let l:op_type = a:1
     else
@@ -123,7 +122,6 @@ function s:Callback(dummy, ...) abort range
     let l:handle = s:GetHandle(l:op_type)
 
     call setpos('.', l:handle['cur_start'])
-    call extend(l:handle, { 'register_default': s:GetDefaultRegister() })
     if l:handle['entry_mode'] ==# 'n'
         silent! execute "normal! \<esc>"
     elseif l:handle['entry_mode'] =~# '\v^[vV]$' && !l:handle['visual_motion']
@@ -573,7 +571,7 @@ endfunction
 
 function s:ExprWithModifiers(handle) abort
     let a:handle['expr_with_modifiers'] = a:handle['expr']
-    if a:handle['accepts_register'] && get(a:handle, 'register', a:handle['register_default']) != a:handle['register_default']
+    if a:handle['accepts_register'] && a:handle['register'] != s:GetDefaultRegister()
         let a:handle['expr_with_modifiers'] = a:handle['expr_with_modifiers'] a:handle['register']
     endif
     if a:handle['accepts_count'] && a:handle['count1'] != 1
@@ -669,11 +667,7 @@ function s:InitRepeat(handle, count, register, mode) abort
         call extend(a:handle, { 'called_from': 'visual repeat', 'entry_mode': mode(1), 'cur_start': getcurpos()})
     endif
     let a:handle['count1'] = (a:count || !has_key(a:handle, 'count1'))? max([1,a:count]) : a:handle['count1']
-    if a:register ==# 'use_default'
-        let a:handle['register'] = a:handle['register_default']
-    elseif a:register !~# a:handle['register_default']
-        let a:handle['register'] = a:register
-    endif
+    let a:handle['register'] = a:register
     if get(a:handle, 'shift_marks')
         if a:mode ==# 'normal'
             let [ a:handle['v_start'], a:handle['v_end'] ] = s:ShiftToCursor(a:handle['v_start'], a:handle['v_end'])
