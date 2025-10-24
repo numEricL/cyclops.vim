@@ -17,34 +17,40 @@ vmap <silent> <plug>(dot#visual_dot) :<c-u>call <sid>DotRepeat(v:count, v:regist
 vmap <silent> <plug>(dot#visual_dot_default_register) :<c-u>call <sid>DotRepeat(v:count, 'use_default', 'visual')<cr>
 omap <silent><expr> <plug>(dot#op_pending_dot) <sid>DotOpPending()
 
-function dot#Map(map, ...) abort range
-    return s:InitCallback('dot', a:map, 0, s:CheckOpts(a:000))
+function dot#ExprMap(map, ...) abort range
+    call s:InitCallback('dot', a:map, 0, s:CheckOptsDict(a:000))
+    let &operatorfunc = op#SID().'Callback'
+    return 'g@'.(mode(1) ==# 'n'? '_' : '')
 endfunction
 
-function dot#Noremap(map, ...) abort range
+function dot#ExprNoremap(map, ...) abort range
     if empty(maparg('<plug>(op#_noremap_'.a:map.')'))
         execute 'noremap <plug>(op#_noremap_'.a:map.') '.a:map
     endif
-    return s:InitCallback('dot', "\<plug>(op#_noremap_".a:map.")", 0, s:CheckOpts(a:000))
+    return s:InitCallback('dot', "\<plug>(op#_noremap_".a:map.")", 0, s:CheckOptsDict(a:000))
 endfunction
 
-function dot#SetMaps(mode, maps, ...) abort range
+function dot#SetExprMaps(mode, maps, ...) abort range
     if type(a:maps) == v:t_list
         for l:map in a:maps
-            call s:SetMap(a:mode, l:map, a:000)
+            call s:SetExprMap(a:mode, l:map, a:000)
         endfor
     else
-        call s:SetMap(a:mode, a:maps, a:000)
+        call s:SetExprMap(a:mode, a:maps, a:000)
     endif
 endfunction
 
-function s:CheckOpts(opts) abort
-    execute "return ".op#SID()."CheckOpts(a:opts)"
+function s:CheckOptsDict(opts) abort
+    execute "return ".op#SID()."CheckOptsDict(a:opts)"
+endfunction
+
+function s:CheckLastChange(handle) abort
+    return empty(a:handle) || has_key(a:handle, 'abort') || getpos("'[") != a:handle['change_start'] || getpos("']") != a:handle['change_end']
 endfunction
 
 function s:DotRepeat(count, register, mode) abort
     let l:handle = s:GetHandle('dot')
-    if  !empty(l:handle) && !has_key(l:handle, 'abort')
+    if !s:CheckLastChange(l:handle)
         call s:InitRepeat(l:handle, a:count, a:register, a:mode)
     endif
     execute "normal! ."
@@ -59,7 +65,7 @@ function s:DotOpPending()
     endif
 endfunction
 
-function s:SetMap(mode, map, args) abort
+function s:SetExprMap(mode, map, args) abort
     let l:args = ''
     for l:arg in a:args
         let l:args .= ', '.(type(l:arg) =~# '\v^[06]$'? l:arg : string(l:arg))
@@ -93,12 +99,16 @@ function s:SetMap(mode, map, args) abort
     endfor
 endfunction
 
-function s:InitCallback(name, expr, pair, opts) abort
-    execute "return ".op#SID()."InitCallback(a:name, a:expr, a:pair, a:opts)"
+function s:InitCallback(op_type, expr, pair, opts) abort
+    execute "return ".op#SID()."InitCallback(a:op_type, a:expr, a:pair, a:opts)"
 endfunction
 
-function s:GetHandle(name) abort
-    execute "return ".op#SID()."GetHandle(a:name)"
+function s:ExecuteAndInitCallback(op_type, expr, pair, opts) abort
+    execute "return ".op#SID()."ExecuteAndInitCallback(a:op_type, a:expr, a:pair, a:opts)"
+endfunction
+
+function s:GetHandle(op_type) abort
+    execute "return ".op#SID()."GetHandle(a:op_type)"
 endfunction
 
 function s:InitRepeat(handle, count, register, mode) abort

@@ -23,39 +23,36 @@ function op#PrintScriptVars() abort range
             endfor
         endfor
     endif
-    for [ l:name, l:handle ] in items(s:handles)
+    for [ l:op_type, l:handle ] in items(s:handles)
         if !empty(l:handle)
             echomsg ' '
             for l:key in l:handle->keys()->sort()
                 let l:item = substitute(string(l:handle[l:key]), "\<plug>", '<Plug>', 'g')
                 let l:item = substitute(l:item, '\v'."^'|'$", '', 'g')
-                echomsg l:name.':' l:key repeat(' ', 20-strdisplaywidth(l:key)) l:item
+                echomsg l:op_type.':' l:key repeat(' ', 20-strdisplaywidth(l:key)) l:item
             endfor
         endif
     endfor
-    echomsg ' '
-    echomsg 'has map to <plug>(op#dot)        ' hasmapto('<plug>(op#dot)')
-    echomsg 'has map to <plug>(op#visual_dot) ' hasmapto('<plug>(op#visual_dot)')
-    nmap .
-    vmap .
     echomsg ' '
     for l:line in execute('let s:')->split("\n")->filter('v:val !~# '.string('\v(handles|stack)'))->sort()
         echomsg l:line
     endfor
 endfunction
 
-function op#Map(map, ...) abort range
-    return s:InitCallback('norepeat', a:map, 0, s:CheckOpts(a:000))
-endfunction
-
-function s:CheckOpts(opts)
+function s:CheckOptsDict(opts)
     if len(a:opts) > 1 || ( len(a:opts) == 1 && type(a:opts[0]) != v:t_dict )
         throw 'cyclops.vim: Incorrect parameter, only a dictionary of options is accepted.'
     endif
-    let l:opts = {'accepts_count': 0, 'accepts_register': 1, 'shift_marks': 0, 'visual_motion': 0, 'operators_consume_typeahead': !empty(g:op#operators_consume_typeahead) }
+    let l:opts = {
+                \ 'accepts_count': 0, 
+                \ 'accepts_register': 1,
+                \ 'shift_marks': 0,
+                \ 'visual_motion': 0,
+                \ 'consumes_typeahead': !empty(g:op#operators_consume_typeahead)
+                \ }
     if len(a:opts)
         for [l:key, l:value] in items(a:opts[0])
-            if l:key !~# '\v^(accepts_count|accepts_register|shift_marks|visual_motion|operators_consume_typeahead)$'
+            if l:key !~# '\v^(accepts_count|accepts_register|shift_marks|visual_motion|consumes_typeahead)$'
                 throw 'cyclops.vim: Unrecognized option '.string(l:key).'.'
             endif
             if l:value != v:true && l:value != v:false
@@ -67,33 +64,49 @@ function s:CheckOpts(opts)
     return l:opts
 endfunction
 
-function op#Noremap(map, ...) abort range
+function op#ExprMap(map, ...) abort range
+    call s:AssertExprMap()
+    call s:InitCallback('norepeat', a:map, 0, s:CheckOptsDict(a:000))
+    return "\<cmd>call ".op#SID()."Callback('', 'stack')\<cr>"
+endfunction
+
+function op#ExprNoremap(map, ...) abort range
+    call s:AssertExprMap()
     if empty(maparg('<plug>(op#_noremap_'.a:map.')'))
         execute 'noremap <plug>(op#_noremap_'.a:map.') '.a:map
     endif
-    return s:InitCallback('norepeat', "\<plug>(op#_noremap_".a:map.")", 0, s:CheckOpts(a:000))
+    call s:InitCallback('norepeat', "\<plug>(op#_noremap_".a:map.")", 0, s:CheckOptsDict(a:000))
 endfunction
 
-function s:InitCallback(name, expr, pair, opts) abort
+function op#ExprNoremap(map, ...) abort range
+    if empty(maparg('<plug>(op#_noremap_'.a:map.')'))
+        execute 'noremap <plug>(op#_noremap_'.a:map.') '.a:map
+    endif
+    call s:InitCallback('norepeat', "\<plug>(op#_noremap_".a:map.")", 0, s:CheckOptsDict(a:000))
+    return "\<cmd>call ".op#SID()."Callback('', 'stack')\<cr>"
+endfunction
+
+function s:InitCallback(op_type, expr, pair, opts) abort
+    echom "EXPR expr: ".string(a:expr)
+    if mode(1) !~# '\v^(n|v|V||s|S||no|nov|noV|no)$'
+        throw 'cyclops.vim: Entry mode '.string(mode(1)).' not yet supported.'
+    endif
+
     let l:handle = s:StartStack()
-    for [l:key, l:value] in items(a:opts)
-        let l:handle[l:key] = l:value
-    endfor
-    call extend(l:handle, { 'input_source': (a:opts['operators_consume_typeahead']? 'typeahead': 'user') })
-    call extend(l:handle, { 'name': a:name, 'expr': a:expr, 'expr_so_far': '', 'called_from': 'initialization' })
-    call extend(l:handle, { 'entry_mode': mode(1), 'cur_start': getcurpos(), 'count1': v:count1, 'register': v:register })
-    if l:handle['name'] ==# 'pair'
+    call extend(l:handle, a:opts)
+    call extend(l:handle, {
+                \ 'input_source': (a:opts['consumes_typeahead']? 'typeahead': 'user'),
+                \ 'op_type': a:op_type,
+                \ 'expr': a:expr,
+                \ 'expr_so_far': '',
+                \ 'called_from': 'initialization',
+                \ 'entry_mode': mode(1),
+                \ 'cur_start': getcurpos(),
+                \ 'count1': v:count1,
+                \ 'register': v:register,
+                \ })
+    if a:op_type ==# 'pair'
         call extend(l:handle, { 'expr': a:pair[a:expr], 'pair': a:pair, 'pair_id': a:expr, 'pair_state': ['invalid', 'invalid'] })
-    endif
-    if l:handle['entry_mode'] !~# '\v^(n|v|V||s|S||no|nov|noV|no)$'
-        throw 'cyclops.vim: Entry mode '.string(mode(1)).' not yet supported. Please make a request at https://github.com/numericl/cyclops.vim/issues'
-    endif
-    call s:AssertExprMap(l:handle)
-    if a:name ==# 'dot'
-        let &operatorfunc = s:SID().'Callback'
-        return 'g@'.(l:handle['entry_mode'] ==# 'n'? '_' : '')
-    else
-        return "\<esc>:call ".s:SID()."Callback(".string('').', '.string('stack').")\<cr>"
     endif
 endfunction
 
@@ -125,8 +138,8 @@ function s:Callback(dummy, ...) abort range
         silent! execute "normal! \<esc>gv"
         call setpos('.', l:handle['cur_end'])
     endif
-    call s:StoreRepeatFrame(l:handle)
-    let &operatorfunc = a:0? &operatorfunc : s:SID().'Callback'
+    call s:StoreHandle(l:handle)
+    let &operatorfunc = a:0? &operatorfunc : op#SID().'Callback'
     unsilent echo
 endfunction
 
@@ -529,7 +542,7 @@ function s:StealTypeahead() abort
     return l:typeahead
 endfunction
 
-function s:AssertExprMap(handle) abort
+function s:AssertExprMap() abort
     if g:op#disable_expr_assert
         return
     endif
@@ -540,9 +553,7 @@ function s:AssertExprMap(handle) abort
         let l:expr_map = 1
     endtry
     if !l:expr_map
-        throw 'cyclops.vim: Error while processing '.string(a:handle['expr']).'. <expr> map
-                    \ must be used for this plugin. To disable this check
-                    \ (and likely break dot repeating) set g:op#disable_expr_assert'
+        throw 'cyclops.vim: Error while processing map. <expr> map must be used for this plugin. To disable this check (and likely break dot repeating) set g:op#disable_expr_assert'
     endif
 endfunction
 
@@ -563,12 +574,51 @@ function s:ExprWithModifiers(handle) abort
     return a:handle['expr_with_modifiers']
 endfunction
 
-function s:GetHandle(name) abort
-    if a:name ==# 'dot_or_stack' && !empty(s:stack) && !has_key(s:stack[-1], 'abort')
+function s:StoreHandle(handle) abort
+    if has_key(a:handle, 'abort')
+        unlet! s:hijack_cmd s:hijack_cmd_type s:hijack_mode
+        return
+    endif
+
+    call extend(a:handle, {'change_start': getpos("'["), 'change_end': getpos("']")})
+
+    if a:handle['op_type'] ==# 'pair'
+        let l:pair_id = a:handle['pair_id']
+        let a:handle['pair'][l:pair_id] = a:handle['expr']
+        let a:handle['pair_state'][l:pair_id] = 'valid'
+        let a:handle['pair_id'] = (a:handle['called_from'] =~# 'repeat')? !l:pair_id : l:pair_id
+    endif
+
+    if a:handle['op_type'] =~# '\v^(dot|pair)$'
+        let [ l:win, l:mode ] = [ winsaveview(), mode(1) ]
+        let l:selectmode = &selectmode | set selectmode=
+        silent! execute "normal! \<esc>gv"
+        let &selectmode = l:selectmode
+        call extend(a:handle, {'v_mode': visualmode(), 'v_start': getpos('v'), 'v_end': getpos('.')} )
+        if l:mode ==# 'n'
+            silent! execute "normal! \<esc>"
+            call winrestview(l:win)
+        elseif l:mode !~# '\v^[vV]$'
+            throw 'cyclops.vim: Unexepcted exit mode'
+        endif
+
+        if a:handle['called_from'] =~# 'initialization'
+            let s:handles[a:handle['op_type']] = deepcopy(a:handle)
+        endif
+    endif
+
+    if a:handle['stack_start']
+        unlet! s:hijack_cmd s:hijack_cmd_type s:hijack_mode
+        call s:PopStack()
+    endif
+endfunction
+
+function s:GetHandle(op_type) abort
+    if a:op_type ==# 'dot_or_stack' && !empty(s:stack) && !has_key(s:stack[-1], 'abort')
         return s:stack[-1]
     else
-        let l:name = substitute(a:name, '\v_or_stack$', '', '')
-        return (l:name ==# 'stack')? s:stack[-1] : s:handles[l:name]
+        let l:op_type = substitute(a:op_type, '\v_or_stack$', '', '')
+        return (l:op_type ==# 'stack')? s:stack[-1] : s:handles[l:op_type]
     endif
 endfunction
 
@@ -591,46 +641,8 @@ function s:StartStack() abort
     return s:stack[-1]
 endfunction
 
-function s:StoreRepeatFrame(handle) abort
-    if has_key(a:handle, 'abort')
-        unlet! s:hijack_cmd s:hijack_cmd_type s:hijack_mode
-        return
-    endif
-
-    if a:handle['name'] ==# 'pair'
-        let l:pair_id = a:handle['pair_id']
-        let a:handle['pair'][l:pair_id] = a:handle['expr']
-        let a:handle['pair_state'][l:pair_id] = 'valid'
-        let a:handle['pair_id'] = (a:handle['called_from'] =~# 'repeat')? !l:pair_id : l:pair_id
-    endif
-
-    if a:handle['name'] =~# '\v^(dot|pair)$'
-        let [ l:win, l:mode ] = [ winsaveview(), mode(1) ]
-        let l:selectmode = &selectmode | set selectmode=
-        silent! execute "normal! \<esc>gv"
-        let &selectmode = l:selectmode
-        call extend(a:handle, {'v_mode': visualmode(), 'v_start': getpos('v'), 'v_end': getpos('.')} )
-        if l:mode ==# 'n'
-            silent! execute "normal! \<esc>"
-            call winrestview(l:win)
-        elseif l:mode !~# '\v^[vV]$'
-            throw 'cyclops.vim: Unexepcted exit mode'
-        endif
-
-        if a:handle['called_from'] =~# 'initialization'
-            let s:handles[a:handle['name']] = deepcopy(a:handle)
-        endif
-    endif
-
-    if a:handle['stack_start']
-        unlet! s:hijack_cmd s:hijack_cmd_type s:hijack_mode
-        call s:PopStack()
-    endif
-endfunction
-
 function s:PushStack() abort
     call add(s:stack, {'stack_start': 0, 'stack_level': len(s:stack)})
-    return
 endfunction
 
 function s:PopStack() abort

@@ -32,28 +32,47 @@ omap <silent><expr> <plug>(pair#op_pending_previous) <sid>PairOpPending(',')
 noremap <silent> <plug>(op#_noremap_;) ;
 noremap <silent> <plug>(op#_noremap_,) ,
 
-function pair#NoremapNext(pair, ...) abort range
-    let l:opts = s:CheckOpts(a:000)
-    return s:Pair(a:pair, 1, 0, l:opts)
+function pair#ExprNoremapNext(pair, ...) abort range
+    let l:opts = s:CheckOptsDict(a:000)
+    let l:pair = s:RegisterPair(a:pair, 1, l:opts)
+    call s:InitCallback('pair', 0, l:pair, l:opts)
+    return "\<cmd>call ".op#SID()."Callback('', 'stack')\<cr>"
 endfunction
 
-function pair#NoremapPrevious(pair, ...) abort range
-    let l:opts = s:CheckOpts(a:000)
-    return s:Pair(a:pair, 1, 1, l:opts)
+function pair#ExprNoremapPrevious(pair, ...) abort range
+    let l:opts = s:CheckOptsDict(a:000)
+    let l:pair = s:RegisterPair(a:pair, 1, l:opts)
+    call s:InitCallback('pair', 1, l:pair, l:opts)
+    return "\<cmd>call ".op#SID()."Callback('', 'stack')\<cr>"
 endfunction
 
-function pair#MapNext(pair, ...) abort range
-    let l:opts = s:CheckOpts(a:000)
-    return s:Pair(a:pair, 0, 0, l:opts)
+function pair#ExprMapNext(pair, ...) abort range
+    let l:opts = s:CheckOptsDict(a:000)
+    let l:pair = s:RegisterPair(a:pair, 0, l:opts)
+    call s:InitCallback('pair', 0, l:pair, l:opts)
+    return "\<cmd>call ".op#SID()."Callback('', 'stack')\<cr>"
 endfunction
 
-function pair#MapPrevious(pair, ...) abort range
-    let l:opts = s:CheckOpts(a:000)
-    return s:Pair(a:pair, 0, 1, l:opts)
+function pair#ExprMapPrevious(pair, ...) abort range
+    let l:opts = s:CheckOptsDict(a:000)
+    let l:pair = s:RegisterPair(a:pair, 0, l:opts)
+    call s:InitCallback('pair', 1, l:pair, l:opts)
+    return "\<cmd>call ".op#SID()."Callback('', 'stack')\<cr>"
+endfunction
+
+function s:RegisterPair(pair, noremap, opts) abort range
+    if type(a:pair) != v:t_list || len(a:pair) != 2
+        throw 'cyclops.vim: Input must be a pair of maps'
+    endif
+    if a:noremap && ( empty(maparg('<plug>(op#_noremap_'.a:pair[0].')')) || empty(maparg('<plug>(op#_noremap_'.a:pair[1].')')) )
+        execute 'noremap <plug>(op#_noremap_'.a:pair[0].') '.a:pair[0]
+        execute 'noremap <plug>(op#_noremap_'.a:pair[1].') '.a:pair[1]
+    endif
+    return a:noremap? [ "\<plug>(op#_noremap_".a:pair[0].')', "\<plug>(op#_noremap_".a:pair[1].')' ] : a:pair
 endfunction
 
 function pair#SetMaps(mode, pairs, ...) abort range
-    let l:opts = s:CheckOpts(a:000)
+    let l:opts = s:CheckOptsDict(a:000)
     if type(a:pairs[0]) == v:t_list
         for l:pair in a:pairs
             call s:SetMap(a:mode, l:pair, l:opts)
@@ -64,7 +83,7 @@ function pair#SetMaps(mode, pairs, ...) abort range
 endfunction
 
 function s:SetMap(mode, pair, opts) abort
-    let l:map_func = ['pair#MapNext', 'pair#MapPrevious']
+    let l:map_func = ['pair#ExprMapNext', 'pair#ExprMapPrevious']
     let l:noremap = (a:mode =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)')
     let l:modes = (a:mode =~# '\v^(no|map)')? 'nvo' : a:mode[0]
     for l:mode in split(l:modes, '\zs')
@@ -97,18 +116,6 @@ function s:SetMap(mode, pair, opts) abort
     endfor
 endfunction
 
-function s:Pair(pair, noremap, id, opts) abort range
-    if type(a:pair) != v:t_list || len(a:pair) != 2
-        throw 'cyclops.vim: Input must be a pair of maps'
-    endif
-    if a:noremap && ( empty(maparg('<plug>(op#_noremap_'.a:pair[0].')')) || empty(maparg('<plug>(op#_noremap_'.a:pair[1].')')) )
-        execute 'noremap <plug>(op#_noremap_'.a:pair[0].') '.a:pair[0]
-        execute 'noremap <plug>(op#_noremap_'.a:pair[1].') '.a:pair[1]
-    endif
-    let l:pair = a:noremap? [ "\<plug>(op#_noremap_".a:pair[0].')', "\<plug>(op#_noremap_".a:pair[1].')' ] : a:pair
-    return s:InitCallback('pair', a:id, l:pair, a:opts)
-endfunction
-
 function s:PairRepeat(direction, count, register, mode) abort
     let l:handle = s:GetHandle('pair')
     if has_key(l:handle, 'abort') || empty(l:handle)
@@ -131,7 +138,7 @@ function s:PairRepeat(direction, count, register, mode) abort
         let l:handle['pair_id'] = l:old_id
     else
         execute "let l:stack = ".op#SID()."StartStack()"
-        call extend(l:stack, { 'name': 'pair', 'expr': l:handle['pair'][l:id], 'pair': deepcopy(l:handle['pair']) })
+        call extend(l:stack, { 'op_type': 'pair', 'expr': l:handle['pair'][l:id], 'pair': deepcopy(l:handle['pair']) })
         call extend(l:stack, { 'accepts_count': l:handle['accepts_count'], 'accepts_register': l:handle['accepts_register'] })
         call extend(l:stack, { 'shift_marks': l:handle['shift_marks'], 'visual_motion': l:handle['visual_motion'] })
         call extend(l:stack, { 'input_cache': get(l:handle, 'input_cache', []), 'input_source': 'input_cache', 'pair_id': l:id })
@@ -158,7 +165,7 @@ function s:PairOpPending(direction)
             return l:op_mode.l:handle['pair'][l:id]
         else
             execute "let l:stack = ".op#SID()."StartStack()"
-            call extend(l:stack, { 'name': 'pair', 'expr': l:handle['pair'][l:id], 'pair': deepcopy(l:handle['pair']) })
+            call extend(l:stack, { 'op_type': 'pair', 'expr': l:handle['pair'][l:id], 'pair': deepcopy(l:handle['pair']) })
             call extend(l:stack, { 'accepts_count': l:handle['accepts_count'], 'accepts_register': l:handle['accepts_register'] })
             call extend(l:stack, { 'shift_marks': l:handle['shift_marks'], 'visual_motion': l:handle['visual_motion'] })
             call extend(l:stack, { 'input_cache': get(l:handle, 'input_cache', []), 'input_source': 'input_cache', 'pair_id': l:id })
@@ -170,20 +177,20 @@ function s:PairOpPending(direction)
     endif
 endfunction
 
-function s:CheckOpts(opts) abort
-    execute "return ".op#SID()."CheckOpts(a:opts)"
+function s:CheckOptsDict(opts) abort
+    execute "return ".op#SID()."CheckOptsDict(a:opts)"
 endfunction
 
-function s:InitCallback(name, expr, pair, opts) abort
-    execute "return ".op#SID()."InitCallback(a:name, a:expr, a:pair, a:opts)"
+function s:InitCallback(op_type, expr, pair, opts) abort
+    execute "return ".op#SID()."InitCallback(a:op_type, a:expr, a:pair, a:opts)"
 endfunction
 
-function s:Callback(dummy, name) abort
-    execute "return ".op#SID()."Callback('', a:name)"
+function s:Callback(dummy, op_type) abort
+    execute "return ".op#SID()."Callback('', a:op_type)"
 endfunction
 
-function s:GetHandle(name) abort
-    execute "return ".op#SID()."GetHandle(a:name)"
+function s:GetHandle(op_type) abort
+    execute "return ".op#SID()."GetHandle(a:op_type)"
 endfunction
 
 function s:InitRepeat(handle, count, register, mode) abort
