@@ -91,17 +91,18 @@ function s:InitCallback(op_type, expr, pair, opts) abort
         throw 'cyclops.vim: Entry mode '.string(mode(1)).' not yet supported.'
     endif
 
-    let l:handle = s:StartStack()
+    call s:StackInit()
+    let l:handle = s:StackTop()
     call extend(l:handle, a:opts)
     call extend(l:handle, {
-                \ 'input_source': (a:opts['consumes_typeahead']? 'typeahead': 'user'),
-                \ 'op_type': a:op_type,
+                \ 'called_from': 'initialization',
+                \ 'count1': v:count1,
+                \ 'cur_start': getcurpos(),
+                \ 'entry_mode': mode(1),
                 \ 'expr': a:expr,
                 \ 'expr_so_far': '',
-                \ 'called_from': 'initialization',
-                \ 'entry_mode': mode(1),
-                \ 'cur_start': getcurpos(),
-                \ 'count1': v:count1,
+                \ 'input_source': (a:opts['consumes_typeahead']? 'typeahead': 'user'),
+                \ 'op_type': a:op_type,
                 \ 'register': v:register,
                 \ })
     if a:op_type ==# 'pair'
@@ -110,7 +111,17 @@ function s:InitCallback(op_type, expr, pair, opts) abort
 endfunction
 
 function s:Callback(dummy, ...) abort range
-    let l:handle = a:0? s:GetHandle(a:1) : s:GetHandle('dot_or_stack')
+
+    if a:0
+        let l:op_type = a:1
+    else
+        " a:0 == 0 if called from operatorfunc (via g@) from the dop map. In this
+        " case we must determine if it's the first call (initialization) or a repeat
+        " call.
+        let l:op_type = (empty(s:stack) || has_key(s:stack[-1], 'abort'))? 'dot' : 'stack'
+    endif
+    let l:handle = s:GetHandle(l:op_type)
+
     call setpos('.', l:handle['cur_start'])
     call extend(l:handle, { 'register_default': s:GetDefaultRegister() })
     if l:handle['entry_mode'] ==# 'n'
@@ -185,7 +196,7 @@ function s:ExecuteMapOnStack(handle) abort
     catch /^op#abort$/
         if !a:handle['stack_start']
             if has_key(a:handle, 'error_log')
-                let l:root = s:GetRootHandle()
+                let l:root = s:StackBottom()
                 let l:root['error_log'] = a:handle['error_log']
             endif
             let l:parent = s:GetParentHandle(a:handle)
@@ -246,7 +257,7 @@ function s:HijackInput(handle) abort
         let s:workaround_f = 0
 
         if !empty(a:handle['hijack_stream'])
-            let l:root = s:GetRootHandle()
+            let l:root = s:StackBottom()
             if !has_key(l:root, 'input_cache')
                 call extend(l:root, {'input_cache': []})
             endif
@@ -613,31 +624,29 @@ function s:StoreHandle(handle) abort
 endfunction
 
 function s:GetHandle(op_type) abort
-    if a:op_type ==# 'dot_or_stack' && !empty(s:stack) && !has_key(s:stack[-1], 'abort')
-        return s:stack[-1]
-    else
-        let l:op_type = substitute(a:op_type, '\v_or_stack$', '', '')
-        return (l:op_type ==# 'stack')? s:stack[-1] : s:handles[l:op_type]
-    endif
-endfunction
-
-function s:GetRootHandle() abort
-    return s:stack[0]
+    return (a:op_type ==# 'stack')? s:stack[-1] : s:handles[a:op_type]
 endfunction
 
 function s:GetParentHandle(handle) abort
     return s:stack[a:handle['stack_level']-1]
 endfunction
 
-function s:StartStack() abort
+function s:StackInit() abort
     if len(s:stack) > 0 && has_key(s:stack[0], 'abort')
-        call remove(s:stack, 0, -1)
+        call remove(s:stack, 0, -1) " clear stack
     endif
     if len(s:stack) == 0
         call s:PushStack()
         let s:stack[0]['stack_start'] = 1
     endif
+endfunction
+
+function s:StackTop() abort
     return s:stack[-1]
+endfunction
+
+function s:StackBottom() abort
+    return s:stack[0]
 endfunction
 
 function s:PushStack() abort

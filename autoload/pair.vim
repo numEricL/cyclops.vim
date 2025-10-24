@@ -129,14 +129,26 @@ function s:PairRepeat(direction, count, register, mode) abort
         call s:Callback('', 'pair')
         let l:handle['pair_id'] = l:old_id
     else
-        execute "let l:stack = ".op#SID()."StartStack()"
-        call extend(l:stack, { 'op_type': 'pair', 'expr': l:handle['pair'][l:id], 'pair': deepcopy(l:handle['pair']) })
-        call extend(l:stack, { 'accepts_count': l:handle['accepts_count'], 'accepts_register': l:handle['accepts_register'] })
-        call extend(l:stack, { 'shift_marks': l:handle['shift_marks'], 'visual_motion': l:handle['visual_motion'] })
-        call extend(l:stack, { 'input_cache': get(l:handle, 'input_cache', []), 'input_source': 'input_cache', 'pair_id': l:id })
-        call extend(l:stack, { 'pair_state': l:handle['pair_state'], 'expr_so_far': '', 'register_default': l:handle['register_default'] })
-        call s:InitRepeat(l:stack, a:count, a:register, a:mode)
-        call extend(l:stack, { 'called_from': 'repeat initialization' })
+        call s:StackInit()
+        let l:top_handle = s:StackTop()
+        " TODO: deepcopy from pair partner and modify only necessary fields
+        call extend(l:top_handle, {
+                    \ 'accepts_count'    : l:handle['accepts_count'],
+                    \ 'accepts_register' : l:handle['accepts_register'],
+                    \ 'expr'             : l:handle['pair'][l:id],
+                    \ 'expr_so_far'      : '',
+                    \ 'input_cache'      : get(l:handle, 'input_cache', []),
+                    \ 'input_source'     : 'input_cache',
+                    \ 'op_type'          : 'pair',
+                    \ 'pair'             : deepcopy(l:handle['pair']),
+                    \ 'pair_id'          : l:id,
+                    \ 'pair_state'       : l:handle['pair_state'],
+                    \ 'register_default' : l:handle['register_default'],
+                    \ 'shift_marks'      : l:handle['shift_marks'],
+                    \ 'visual_motion'    : l:handle['visual_motion'],
+                    \ })
+        call s:InitRepeat(l:top_handle, a:count, a:register, a:mode)
+        call extend(l:top_handle, { 'called_from': 'repeat initialization' })
         call s:Callback('', 'stack')
     endif
 endfunction
@@ -156,14 +168,15 @@ function s:PairOpPending(direction)
             endif
             return l:op_mode.l:handle['pair'][l:id]
         else
-            execute "let l:stack = ".op#SID()."StartStack()"
-            call extend(l:stack, { 'op_type': 'pair', 'expr': l:handle['pair'][l:id], 'pair': deepcopy(l:handle['pair']) })
-            call extend(l:stack, { 'accepts_count': l:handle['accepts_count'], 'accepts_register': l:handle['accepts_register'] })
-            call extend(l:stack, { 'shift_marks': l:handle['shift_marks'], 'visual_motion': l:handle['visual_motion'] })
-            call extend(l:stack, { 'input_cache': get(l:handle, 'input_cache', []), 'input_source': 'input_cache', 'pair_id': l:id })
-            call extend(l:stack, { 'pair_state': l:handle['pair_state'], 'expr_so_far': '', 'register_default': l:handle['register_default'] })
-            call extend(l:stack, { 'cur_start': getcurpos() })
-            call extend(l:stack, { 'called_from': 'repeat initialization', 'operator': v:operator, 'entry_mode': mode(1), 'count1': 1 })
+            call s:StackInit()
+            let l:top_handle = s:StackTop()
+            call extend(l:top_handle, { 'op_type': 'pair', 'expr': l:handle['pair'][l:id], 'pair': deepcopy(l:handle['pair']) })
+            call extend(l:top_handle, { 'accepts_count': l:handle['accepts_count'], 'accepts_register': l:handle['accepts_register'] })
+            call extend(l:top_handle, { 'shift_marks': l:handle['shift_marks'], 'visual_motion': l:handle['visual_motion'] })
+            call extend(l:top_handle, { 'input_cache': get(l:handle, 'input_cache', []), 'input_source': 'input_cache', 'pair_id': l:id })
+            call extend(l:top_handle, { 'pair_state': l:handle['pair_state'], 'expr_so_far': '', 'register_default': l:handle['register_default'] })
+            call extend(l:top_handle, { 'cur_start': getcurpos() })
+            call extend(l:top_handle, { 'called_from': 'repeat initialization', 'operator': v:operator, 'entry_mode': mode(1), 'count1': 1 })
             return "\<esc>:call ".op#SID()."Callback(".string('').', '.string('stack').")\<cr>"
         endif
     endif
@@ -187,6 +200,14 @@ endfunction
 
 function s:InitRepeat(handle, count, register, mode) abort
     execute "call ".op#SID()."InitRepeat(a:handle, a:count, a:register, a:mode)"
+endfunction
+
+function s:StackInit() abort
+    execute "call ".op#SID()."StackInit()"
+endfunction
+
+function s:StackTop() abort
+    execute "return ".op#SID()."StackTop()"
 endfunction
 
 if !g:op#no_mappings
