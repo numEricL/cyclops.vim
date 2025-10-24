@@ -5,28 +5,20 @@ silent! call op#Load()
 
 if !g:op#no_mappings
     nmap   ; <plug>(pair#next)
-    nmap ""; <plug>(pair#next_default_register)
     vmap   ; <plug>(pair#visual_next)
-    vmap ""; <plug>(pair#visual_next_default_register)
     omap   ; <plug>(pair#op_pending_next)
 
     nmap   , <plug>(pair#previous)
-    nmap "", <plug>(pair#previous_default_register)
     vmap   , <plug>(pair#visual_previous)
-    vmap "", <plug>(pair#visual_previous_default_register)
     omap   , <plug>(pair#op_pending_previous)
 endif
 
 nmap <silent> <plug>(pair#next) :<c-u>call <sid>PairRepeat(';', v:count, v:register, 'normal')<cr>
-nmap <silent> <plug>(pair#next_default_register) :<c-u>call <sid>PairRepeat(';', v:count, 'use_default', 'normal')<cr>
 vmap <silent> <plug>(pair#visual_next) :<c-u>call <sid>PairRepeat(';', v:count, v:register, 'visual')<cr>
-vmap <silent> <plug>(pair#visual_next_default_register) :<c-u>call <sid>PairRepeat(';', v:count, 'use_default', 'visual')<cr>
 omap <silent><expr> <plug>(pair#op_pending_next) <sid>PairOpPending(';')
 
 nmap <silent> <plug>(pair#previous) :<c-u>call <sid>PairRepeat(',', v:count, v:register, 'normal')<cr>
-nmap <silent> <plug>(pair#previous_default_register) :<c-u>call <sid>PairRepeat(',', v:count, 'use_default', 'normal')<cr>
 vmap <silent> <plug>(pair#visual_previous) :<c-u>call <sid>PairRepeat(',', v:count, v:register, 'visual')<cr>
-vmap <silent> <plug>(pair#visual_previous_default_register) :<c-u>call <sid>PairRepeat(',', v:count, 'use_default', 'visual')<cr>
 omap <silent><expr> <plug>(pair#op_pending_previous) <sid>PairOpPending(',')
 
 noremap <silent> <plug>(op#_noremap_;) ;
@@ -182,11 +174,11 @@ function s:CheckOptsDict(opts) abort
 endfunction
 
 function s:InitCallback(op_type, expr, pair, opts) abort
-    execute "return ".op#SID()."InitCallback(a:op_type, a:expr, a:pair, a:opts)"
+    execute "call ".op#SID()."InitCallback(a:op_type, a:expr, a:pair, a:opts)"
 endfunction
 
 function s:Callback(dummy, op_type) abort
-    execute "return ".op#SID()."Callback('', a:op_type)"
+    execute "call ".op#SID()."Callback('', a:op_type)"
 endfunction
 
 function s:GetHandle(op_type) abort
@@ -194,7 +186,7 @@ function s:GetHandle(op_type) abort
 endfunction
 
 function s:InitRepeat(handle, count, register, mode) abort
-    execute "return ".op#SID()."InitRepeat(a:handle, a:count, a:register, a:mode)"
+    execute "call ".op#SID()."InitRepeat(a:handle, a:count, a:register, a:mode)"
 endfunction
 
 if !g:op#no_mappings

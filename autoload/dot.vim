@@ -5,16 +5,12 @@ silent! call op#Load()
 
 if !g:op#no_mappings
     nmap   . <plug>(dot#dot)
-    nmap "". <plug>(dot#dot_default_register)
     vmap   . <plug>(dot#visual_dot)
-    vmap "". <plug>(dot#visual_dot_default_register)
     omap   . <plug>(dot#op_pending_dot)
 endif
 
-nmap <silent> <plug>(dot#dot) :<c-u>call <sid>DotRepeat(v:count, v:register, 'normal')<cr>
-nmap <silent> <plug>(dot#dot_default_register) :<c-u>call <sid>DotRepeat(v:count, 'use_default', 'normal')<cr>
-vmap <silent> <plug>(dot#visual_dot) :<c-u>call <sid>DotRepeat(v:count, v:register, 'visual')<cr>
-vmap <silent> <plug>(dot#visual_dot_default_register) :<c-u>call <sid>DotRepeat(v:count, 'use_default', 'visual')<cr>
+nmap <silent> <plug>(dot#dot) <cmd>call <sid>DotRepeat(v:count, v:register, 'normal')<cr>
+vmap <silent> <plug>(dot#visual_dot) <cmd>call <sid>DotRepeat(v:count, v:register, 'visual')<cr>
 omap <silent><expr> <plug>(dot#op_pending_dot) <sid>DotOpPending()
 
 function dot#Map(map, ...) abort range
@@ -27,7 +23,8 @@ function dot#Noremap(map, ...) abort range
     if empty(maparg('<plug>(op#_noremap_'.a:map.')'))
         execute 'noremap <plug>(op#_noremap_'.a:map.') '.a:map
     endif
-    return s:InitCallback('dot', "\<plug>(op#_noremap_".a:map.")", 0, s:CheckOptsDict(a:000))
+    call s:InitCallback('dot', "\<plug>(op#_noremap_".a:map.")", 0, s:CheckOptsDict(a:000))
+    return 'g@'.(mode(1) ==# 'n'? '_' : '')
 endfunction
 
 function dot#SetMaps(mode, maps, ...) abort range
@@ -100,11 +97,7 @@ function s:SetMap(mode, map, args) abort
 endfunction
 
 function s:InitCallback(op_type, expr, pair, opts) abort
-    execute "return ".op#SID()."InitCallback(a:op_type, a:expr, a:pair, a:opts)"
-endfunction
-
-function s:ExecuteAndInitCallback(op_type, expr, pair, opts) abort
-    execute "return ".op#SID()."ExecuteAndInitCallback(a:op_type, a:expr, a:pair, a:opts)"
+    execute "call ".op#SID()."InitCallback(a:op_type, a:expr, a:pair, a:opts)"
 endfunction
 
 function s:GetHandle(op_type) abort
@@ -112,7 +105,7 @@ function s:GetHandle(op_type) abort
 endfunction
 
 function s:InitRepeat(handle, count, register, mode) abort
-    execute "return ".op#SID()."InitRepeat(a:handle, a:count, a:register, a:mode)"
+    execute "call ".op#SID()."InitRepeat(a:handle, a:count, a:register, a:mode)"
 endfunction
 
 let &cpo = s:cpo

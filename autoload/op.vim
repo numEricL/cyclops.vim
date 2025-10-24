@@ -87,7 +87,6 @@ function op#ExprNoremap(map, ...) abort range
 endfunction
 
 function s:InitCallback(op_type, expr, pair, opts) abort
-    echom "EXPR expr: ".string(a:expr)
     if mode(1) !~# '\v^(n|v|V||s|S||no|nov|noV|no)$'
         throw 'cyclops.vim: Entry mode '.string(mode(1)).' not yet supported.'
     endif
@@ -599,7 +598,7 @@ function s:StoreHandle(handle) abort
             silent! execute "normal! \<esc>"
             call winrestview(l:win)
         elseif l:mode !~# '\v^[vV]$'
-            throw 'cyclops.vim: Unexepcted exit mode'
+            throw 'cyclops.vim: Unexpected exit mode'
         endif
 
         if a:handle['called_from'] =~# 'initialization'
