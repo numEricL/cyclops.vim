@@ -72,25 +72,39 @@ endfunction
 
 function op#Noremap(map, ...) abort range
     call s:AssertExprMap()
-    if empty(maparg('<plug>(op#_noremap_'.a:map.')'))
-        execute 'noremap <plug>(op#_noremap_'.a:map.') '.a:map
-    endif
-    call s:InitCallback('norepeat', "\<plug>(op#_noremap_".a:map.")", 0, s:CheckOptsDict(a:000))
-endfunction
-
-function op#ExprNoremap(map, ...) abort range
-    if empty(maparg('<plug>(op#_noremap_'.a:map.')'))
-        execute 'noremap <plug>(op#_noremap_'.a:map.') '.a:map
-    endif
-    call s:InitCallback('norepeat', "\<plug>(op#_noremap_".a:map.")", 0, s:CheckOptsDict(a:000))
+    let l:map = s:RegisterNoremap(a:map)
+    call s:InitCallback('norepeat', l:map, 0, s:CheckOptsDict(a:000))
     return "\<cmd>call ".op#SID()."Callback('', 'stack')\<cr>"
 endfunction
 
-function s:InitCallback(op_type, expr, pair, opts) abort
-    if mode(1) !~# '\v^(n|v|V||s|S||no|nov|noV|no)$'
+function s:AssertMode() abort
+    if mode(1) !~# '\v^(n|v|V||no|nov|noV|no)$'
         throw 'cyclops.vim: Entry mode '.string(mode(1)).' not yet supported.'
     endif
+endfunction
 
+function s:RegisterNoremap(map) abort
+    call s:AssertMode()
+    let l:mode = mode(1)
+    if l:mode ==# 'n'
+        let l:noremap = 'nnoremap'
+    elseif l:mode =~# '\v^[vV]$'
+        let l:noremap = 'xnoremap'
+    elseif l:mode =~# '\v^no.=$'
+        let l:noremap = 'onoremap'
+    else
+        throw 'cyclops.vim: impossible state in s:RegisterNoremap reached'
+    endif
+    let l:map_string = '<plug>(op#_noremap_'.a:map.')'
+    if empty(maparg(l:map_string))
+        execute l:noremap.' '.l:map_string.' '.a:map
+    endif
+    return "\<plug>(op#_noremap_".a:map.')'
+endfunction
+
+
+function s:InitCallback(op_type, expr, pair, opts) abort
+    call s:AssertMode()
     call s:StackInit()
     let l:handle = s:StackTop()
     call extend(l:handle, a:opts)

@@ -20,10 +20,8 @@ function dot#Map(map, ...) abort range
 endfunction
 
 function dot#Noremap(map, ...) abort range
-    if empty(maparg('<plug>(op#_noremap_'.a:map.')'))
-        execute 'noremap <plug>(op#_noremap_'.a:map.') '.a:map
-    endif
-    call s:InitCallback('dot', "\<plug>(op#_noremap_".a:map.")", 0, s:CheckOptsDict(a:000))
+    let l:map = s:RegisterNoremap(a:map)
+    call s:InitCallback('dot', l:map, 0, s:CheckOptsDict(a:000))
     return 'g@'.(mode(1) ==# 'n'? '_' : '')
 endfunction
 
@@ -94,6 +92,10 @@ function s:SetMap(mode, map, args) abort
         execute l:create_plugmap
         execute l:mode.'map <expr> '.a:map.' '.l:map_func.'('.string(l:plugmap).l:args.')'
     endfor
+endfunction
+
+function s:RegisterNoremap(map) abort
+    execute "return ".op#SID()."RegisterNoremap(a:map)"
 endfunction
 
 function s:InitCallback(op_type, expr, pair, opts) abort
