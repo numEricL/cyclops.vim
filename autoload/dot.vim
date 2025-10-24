@@ -70,7 +70,7 @@ function s:SetExprMap(mode, map, args) abort
     for l:arg in a:args
         let l:args .= ', '.(type(l:arg) =~# '\v^[06]$'? l:arg : string(l:arg))
     endfor
-    let l:map_func = 'dot#Map'
+    let l:map_func = 'dot#ExprMap'
     let l:noremap = (a:mode =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)')
     let l:modes = (a:mode =~# '\v^(no|map)')? 'nvo' : a:mode[0]
     for l:mode in split(l:modes, '\zs')
