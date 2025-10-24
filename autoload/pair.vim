@@ -32,28 +32,28 @@ omap <silent><expr> <plug>(pair#op_pending_previous) <sid>PairOpPending(',')
 noremap <silent> <plug>(op#_noremap_;) ;
 noremap <silent> <plug>(op#_noremap_,) ,
 
-function pair#ExprNoremapNext(pair, ...) abort range
+function pair#NoremapNext(pair, ...) abort range
     let l:opts = s:CheckOptsDict(a:000)
     let l:pair = s:RegisterPair(a:pair, 1, l:opts)
     call s:InitCallback('pair', 0, l:pair, l:opts)
     return "\<cmd>call ".op#SID()."Callback('', 'stack')\<cr>"
 endfunction
 
-function pair#ExprNoremapPrevious(pair, ...) abort range
+function pair#NoremapPrevious(pair, ...) abort range
     let l:opts = s:CheckOptsDict(a:000)
     let l:pair = s:RegisterPair(a:pair, 1, l:opts)
     call s:InitCallback('pair', 1, l:pair, l:opts)
     return "\<cmd>call ".op#SID()."Callback('', 'stack')\<cr>"
 endfunction
 
-function pair#ExprMapNext(pair, ...) abort range
+function pair#MapNext(pair, ...) abort range
     let l:opts = s:CheckOptsDict(a:000)
     let l:pair = s:RegisterPair(a:pair, 0, l:opts)
     call s:InitCallback('pair', 0, l:pair, l:opts)
     return "\<cmd>call ".op#SID()."Callback('', 'stack')\<cr>"
 endfunction
 
-function pair#ExprMapPrevious(pair, ...) abort range
+function pair#MapPrevious(pair, ...) abort range
     let l:opts = s:CheckOptsDict(a:000)
     let l:pair = s:RegisterPair(a:pair, 0, l:opts)
     call s:InitCallback('pair', 1, l:pair, l:opts)
@@ -83,7 +83,7 @@ function pair#SetMaps(mode, pairs, ...) abort range
 endfunction
 
 function s:SetMap(mode, pair, opts) abort
-    let l:map_func = ['pair#ExprMapNext', 'pair#ExprMapPrevious']
+    let l:map_func = ['pair#MapNext', 'pair#MapPrevious']
     let l:noremap = (a:mode =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)')
     let l:modes = (a:mode =~# '\v^(no|map)')? 'nvo' : a:mode[0]
     for l:mode in split(l:modes, '\zs')

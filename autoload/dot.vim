@@ -17,26 +17,26 @@ vmap <silent> <plug>(dot#visual_dot) :<c-u>call <sid>DotRepeat(v:count, v:regist
 vmap <silent> <plug>(dot#visual_dot_default_register) :<c-u>call <sid>DotRepeat(v:count, 'use_default', 'visual')<cr>
 omap <silent><expr> <plug>(dot#op_pending_dot) <sid>DotOpPending()
 
-function dot#ExprMap(map, ...) abort range
+function dot#Map(map, ...) abort range
     call s:InitCallback('dot', a:map, 0, s:CheckOptsDict(a:000))
     let &operatorfunc = op#SID().'Callback'
     return 'g@'.(mode(1) ==# 'n'? '_' : '')
 endfunction
 
-function dot#ExprNoremap(map, ...) abort range
+function dot#Noremap(map, ...) abort range
     if empty(maparg('<plug>(op#_noremap_'.a:map.')'))
         execute 'noremap <plug>(op#_noremap_'.a:map.') '.a:map
     endif
     return s:InitCallback('dot', "\<plug>(op#_noremap_".a:map.")", 0, s:CheckOptsDict(a:000))
 endfunction
 
-function dot#SetExprMaps(mode, maps, ...) abort range
+function dot#SetMaps(mode, maps, ...) abort range
     if type(a:maps) == v:t_list
         for l:map in a:maps
-            call s:SetExprMap(a:mode, l:map, a:000)
+            call s:SetMap(a:mode, l:map, a:000)
         endfor
     else
-        call s:SetExprMap(a:mode, a:maps, a:000)
+        call s:SetMap(a:mode, a:maps, a:000)
     endif
 endfunction
 
@@ -65,12 +65,12 @@ function s:DotOpPending()
     endif
 endfunction
 
-function s:SetExprMap(mode, map, args) abort
+function s:SetMap(mode, map, args) abort
     let l:args = ''
     for l:arg in a:args
         let l:args .= ', '.(type(l:arg) =~# '\v^[06]$'? l:arg : string(l:arg))
     endfor
-    let l:map_func = 'dot#ExprMap'
+    let l:map_func = 'dot#Map'
     let l:noremap = (a:mode =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)')
     let l:modes = (a:mode =~# '\v^(no|map)')? 'nvo' : a:mode[0]
     for l:mode in split(l:modes, '\zs')

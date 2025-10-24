@@ -64,13 +64,13 @@ function s:CheckOptsDict(opts)
     return l:opts
 endfunction
 
-function op#ExprMap(map, ...) abort range
+function op#Map(map, ...) abort range
     call s:AssertExprMap()
     call s:InitCallback('norepeat', a:map, 0, s:CheckOptsDict(a:000))
     return "\<cmd>call ".op#SID()."Callback('', 'stack')\<cr>"
 endfunction
 
-function op#ExprNoremap(map, ...) abort range
+function op#Noremap(map, ...) abort range
     call s:AssertExprMap()
     if empty(maparg('<plug>(op#_noremap_'.a:map.')'))
         execute 'noremap <plug>(op#_noremap_'.a:map.') '.a:map
