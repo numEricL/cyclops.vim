@@ -9,6 +9,7 @@ let g:op#cursor_highlight_fallback   = !exists('g:op#cursor_highlight_fallback')
 
 let s:stack = []
 let s:handles = { 'norepeat': {}, 'dot': {}, 'pair': {} }
+let g:handles = s:handles
 
 function op#PrintScriptVars() abort range
     for l:line in execute('let g:')->split("\n")->filter('v:val =~# '.string('\v^op#'))->sort()
@@ -27,9 +28,9 @@ function op#PrintScriptVars() abort range
         if !empty(l:handle)
             echomsg ' '
             for l:key in l:handle->keys()->sort()
-                let l:item = substitute(string(l:handle[l:key]), "\<plug>", '<Plug>', 'g')
-                let l:item = substitute(l:item, '\v'."^'|'$", '', 'g')
-                echomsg l:op_type.':' l:key repeat(' ', 20-strdisplaywidth(l:key)) l:item
+                let l:type = s:GetType(l:handle[l:key])
+                let l:value = s:FormatValue( l:key, l:handle[l:key] )
+                echomsg l:op_type ':' s:Pad(l:key, 20) . s:Pad(l:type, 8) l:value
             endfor
         endif
     endfor
@@ -39,12 +40,54 @@ function op#PrintScriptVars() abort range
     endfor
 endfunction
 
+function s:FormatValue(key, value) abort
+    if a:key ==# 'input_cache'
+        let l:value = '[' . join(a:value, ', ') . ']'
+    elseif a:key =~# '\v^expr'
+        let l:value = substitute(a:value, "\<plug>", '<Plug>', 'g')
+    else
+        let l:value = a:value
+    endif
+    return l:value
+endfunction
+
+function s:Pad(value, length) abort
+    let l:pad_len = a:length - strdisplaywidth(a:value)
+    let l:pad = (l:pad_len > 0)? repeat(' ', l:pad_len) : ''
+    return a:value . l:pad
+endfunction
+
+function s:GetType(val) abort
+    let l:type = type(a:val)
+    if     l:type == v:t_number
+        return 'num'
+    elseif l:type == v:t_string
+        return 'str'
+    elseif l:type == v:t_func
+        return 'func'
+    elseif l:type == v:t_list
+        return 'list'
+    elseif l:type == v:t_dict
+        return 'dict'
+    elseif l:type == v:t_float
+        return 'float'
+    elseif l:type == v:t_bool
+        return 'bool'
+    elseif l:type == 7
+        return 'null'
+    elseif l:type == v:t_blob
+        return 'blob'
+    else
+        return 'unknown'
+    endif
+endfunction
+
 function s:CheckOptsDict(opts)
     if len(a:opts) > 1 || ( len(a:opts) == 1 && type(a:opts[0]) != v:t_dict )
         throw 'cyclops.vim: Incorrect parameter, only a dictionary of options is accepted.'
     endif
     let l:opts = {
-                \ 'accepts_count': 0, 
+                \ 'accepts_count': 0,
                 \ 'accepts_register': 1,
                 \ 'shift_marks': 0,
                 \ 'visual_motion': 0,
