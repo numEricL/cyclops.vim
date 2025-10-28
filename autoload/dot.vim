@@ -25,18 +25,19 @@ function dot#Noremap(map, ...) abort range
     return 'g@'.(mode(1) ==# 'n'? '_' : '')
 endfunction
 
-function dot#SetMaps(mode, maps, ...) abort range
+function dot#SetMaps(mapping_type, maps, ...) abort range
+    let l:opts = s:CheckOptsDict(a:000)
     if type(a:maps) == v:t_list
         for l:map in a:maps
-            call s:SetMap(a:mode, l:map, a:000)
+            call s:SetMap(a:mapping_type, l:map, l:opts)
         endfor
     else
-        call s:SetMap(a:mode, a:maps, a:000)
+        call s:SetMap(a:mapping_type, a:maps, l:opts)
     endif
 endfunction
 
-function s:CheckOptsDict(opts) abort
-    execute "return ".op#SID()."CheckOptsDict(a:opts)"
+function s:CheckOptsDict(vargs) abort
+    execute "return ".op#SID()."CheckOptsDict(a:vargs)"
 endfunction
 
 function s:DotRepeat(count, register, mode) abort
@@ -54,38 +55,29 @@ function s:DotOpPending()
     endif
 endfunction
 
-function s:SetMap(mode, map, args) abort
-    let l:args = ''
-    for l:arg in a:args
-        let l:args .= ', '.(type(l:arg) =~# '\v^[06]$'? l:arg : string(l:arg))
-    endfor
-    let l:map_func = 'dot#Map'
-    let l:noremap = (a:mode =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)')
-    let l:modes = (a:mode =~# '\v^(no|map)')? 'nvo' : a:mode[0]
-    for l:mode in split(l:modes, '\zs')
-        let l:plugmap = ''
+function s:SetMap(mapping_type, map, opts) abort
+    let l:noremap = (a:mapping_type =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)')
+    let l:modes = (a:mapping_type =~# '\v^(no|map)')? 'nvo' : a:mapping_type[0]
+
+    let l:plugmap = ''
+    if l:noremap || empty(maparg(a:map, l:modes[0]))
+        let l:plugmap = s:RegisterNoremap(a:map)
+    else
+        call s:AssertSameRHS(split(l:modes, '\zs'), a:map)
         let l:create_plugmap = ''
-        if l:noremap || empty(maparg(a:map, l:mode))
-            let l:plugmap = '<plug>(op#_noremap_'.a:map.')'
-            if a:map !~# '\v^[fFtT]$'   " see workaround_f
-                let l:create_plugmap = 'noremap <silent> '.l:plugmap.' '.a:map
-            endif
-        else
-            let l:plugmap = '<plug>(op#_'.l:mode.'map_'.a:map.')'
-            let l:mapinfo = maparg(a:map, l:mode, 0, 1)
-            let l:rhs = substitute(l:mapinfo['rhs'], '\V<sid>', '<snr>'.l:mapinfo['sid'].'_', '')
-            let l:rhs = substitute(l:rhs, '\v(\|)@<!\|(\|)@!', '<bar>', 'g')
-            let l:create_plugmap .= (l:mapinfo['noremap'])? 'noremap ' : 'map '
-            let l:create_plugmap .= (l:mapinfo['buffer'])? '<buffer>' : ''
-            let l:create_plugmap .= (l:mapinfo['nowait'])? '<nowait>' : ''
-            let l:create_plugmap .= (l:mapinfo['silent'])? '<silent>' : ''
-            let l:create_plugmap .= (l:mapinfo['expr'])? '<expr>' : ''
-            let l:create_plugmap .= l:plugmap.' '
-            let l:create_plugmap .= l:rhs
-        endif
+        let l:plugmap = '<plug>(op#_'.a:mapping_type.'_'.a:map.')'
+        let l:mapinfo = maparg(a:map, l:mode, 0, 1)
+        let l:rhs = substitute(l:mapinfo['rhs'], '\V<sid>', '<snr>'.l:mapinfo['sid'].'_', '')
+        let l:rhs = substitute(l:rhs, '\v(\|)@<!\|(\|)@!', '<bar>', 'g')
+        let l:create_plugmap .= (l:mapinfo['noremap'])? 'noremap ' : 'map '
+        let l:create_plugmap .= (l:mapinfo['buffer'])? '<buffer>' : ''
+        let l:create_plugmap .= (l:mapinfo['nowait'])? '<nowait>' : ''
+        let l:create_plugmap .= (l:mapinfo['silent'])? '<silent>' : ''
+        let l:create_plugmap .= (l:mapinfo['expr'])? '<expr>' : ''
+        let l:create_plugmap .= l:plugmap.' '
         execute l:create_plugmap
-        execute l:mode.'map <expr> '.a:map.' '.l:map_func.'('.string(l:plugmap).l:args.')'
-    endfor
+    endif
+    execute a:mapping_type.' <expr> '.a:map.' dot#Map('.string(l:plugmap).', '.string(l:opts).')'
 endfunction
 
 function s:RegisterNoremap(map) abort
