@@ -39,15 +39,9 @@ function s:CheckOptsDict(opts) abort
     execute "return ".op#SID()."CheckOptsDict(a:opts)"
 endfunction
 
-function s:CheckLastChange(handle) abort
-    return empty(a:handle) || has_key(a:handle, 'abort') || getpos("'[") != a:handle['change_start'] || getpos("']") != a:handle['change_end']
-endfunction
-
 function s:DotRepeat(count, register, mode) abort
     let l:handle = s:GetHandle('dot')
-    if !s:CheckLastChange(l:handle)
-        call s:InitRepeat(l:handle, a:count, a:register, a:mode)
-    endif
+    call s:InitRepeat(l:handle, a:count, a:register, a:mode)
     execute "normal! ."
 endfunction
 

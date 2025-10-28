@@ -20,7 +20,9 @@ function op#PrintScriptVars() abort range
         for l:handle in s:stack
             echomsg l:handle['stack_level']? ' ' : ''
             for l:key in l:handle->keys()->sort()
-                echomsg 'stack '.l:handle['stack_level'].':' l:key repeat(' ', 20-strdisplaywidth(l:key)) l:handle[l:key]
+                let l:type = s:GetType(l:handle[l:key])
+                let l:value = s:FormatValue( l:key, l:handle[l:key] )
+                echomsg 'stack' s:Pad(l:handle['stack_level'], 2) ':' s:Pad(l:key, 20) s:Pad(l:type, 8) l:value
             endfor
         endfor
     endif
@@ -30,7 +32,7 @@ function op#PrintScriptVars() abort range
             for l:key in l:handle->keys()->sort()
                 let l:type = s:GetType(l:handle[l:key])
                 let l:value = s:FormatValue( l:key, l:handle[l:key] )
-                echomsg l:op_type ':' s:Pad(l:key, 20) . s:Pad(l:type, 8) l:value
+                echomsg l:op_type ':' s:Pad(l:key, 20) s:Pad(l:type, 8) l:value
             endfor
         endif
     endfor
@@ -178,6 +180,10 @@ function s:Callback(dummy, ...) abort range
     endif
     let l:handle = s:GetHandle(l:op_type)
 
+    if l:op_type !=# 'stack'
+        call s:PrepareRepeat(l:handle)
+    endif
+
     call setpos('.', l:handle['cur_start'])
     if l:handle['entry_mode'] ==# 'n'
         silent! execute "normal! \<esc>"
@@ -203,6 +209,14 @@ function s:Callback(dummy, ...) abort range
         silent! execute "normal! \<esc>gv"
         call setpos('.', l:handle['cur_end'])
     endif
+
+    if l:handle['op_type'] ==# 'pair'
+        let l:pair_id = l:handle['pair_id']
+        let l:handle['pair'][l:pair_id] = l:handle['expr']
+        let l:handle['pair_state'][l:pair_id] = 'valid'
+        let l:handle['pair_id'] = (l:handle['called_from'] =~# 'repeat')? !l:pair_id : l:pair_id
+    endif
+
     call s:StoreHandle(l:handle)
     let &operatorfunc = a:0? &operatorfunc : op#SID().'Callback'
     unsilent echo
@@ -645,15 +659,6 @@ function s:StoreHandle(handle) abort
         return
     endif
 
-    call extend(a:handle, {'change_start': getpos("'["), 'change_end': getpos("']")})
-
-    if a:handle['op_type'] ==# 'pair'
-        let l:pair_id = a:handle['pair_id']
-        let a:handle['pair'][l:pair_id] = a:handle['expr']
-        let a:handle['pair_state'][l:pair_id] = 'valid'
-        let a:handle['pair_id'] = (a:handle['called_from'] =~# 'repeat')? !l:pair_id : l:pair_id
-    endif
-
     if a:handle['op_type'] =~# '\v^(dot|pair)$'
         let [ l:win, l:mode ] = [ winsaveview(), mode(1) ]
         let l:selectmode = &selectmode | set selectmode=
@@ -715,18 +720,26 @@ function s:PopStack() abort
 endfunction
 
 function s:InitRepeat(handle, count, register, mode) abort
-    if a:mode ==# 'normal'
+    call extend(a:handle, {'repeat_count': a:count, 'repeat_register': a:register, 'repeat_mode': a:mode })
+endfunction
+
+function s:PrepareRepeat(handle) abort
+    let l:count = a:handle['repeat_count']
+    let l:register = a:handle['repeat_register']
+    let l:mode = a:handle['repeat_mode']
+
+    if l:mode ==# 'normal'
         call extend(a:handle, { 'called_from': 'repeat', 'entry_mode': 'n', 'cur_start': getcurpos()})
-    elseif a:mode ==# 'visual'
+    elseif l:mode ==# 'visual'
         let l:selectmode = &selectmode | set selectmode=
         silent! execute "normal! \<esc>gv"
         let &selectmode = l:selectmode
         call extend(a:handle, { 'called_from': 'visual repeat', 'entry_mode': mode(1), 'cur_start': getcurpos()})
     endif
-    let a:handle['count1'] = (a:count || !has_key(a:handle, 'count1'))? max([1,a:count]) : a:handle['count1']
-    let a:handle['register'] = a:register
+    let a:handle['count1'] = (l:count || !has_key(a:handle, 'count1'))? max([1,l:count]) : a:handle['count1']
+    let a:handle['register'] = l:register
     if get(a:handle, 'shift_marks')
-        if a:mode ==# 'normal'
+        if l:mode ==# 'normal'
             let [ a:handle['v_start'], a:handle['v_end'] ] = s:ShiftToCursor(a:handle['v_start'], a:handle['v_end'])
             call setpos('.', a:handle['v_start'])
             let l:selectmode = &selectmode | set selectmode=
@@ -736,7 +749,8 @@ function s:InitRepeat(handle, count, register, mode) abort
             silent! execute "normal! \<esc>"
         endif
         let [ l:shifted_start, l:shifted_end ] = s:ShiftToCursor(getpos("'["), getpos("']"))
-        call setpos("'[", l:shifted_start) | call setpos("']", l:shifted_end)
+        call setpos("'[", l:shifted_start)
+        call setpos("']", l:shifted_end)
     endif
 endfunction
 
