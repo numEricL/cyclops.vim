@@ -21,6 +21,7 @@ let s:hijack_probe = '×'
 let s:stack = []
 let s:handles = { 'op': {}, 'dot': {}, 'pair': {} }
 let s:error_log = []
+let s:reduced_expr = ''
 
 let g:handles = s:handles
 let g:stack = s:stack
@@ -65,7 +66,7 @@ function op#PrintScriptVars() abort range
     endfor
     echomsg ' '
     for l:line in execute('let s:')->split("\n")->filter('v:val !~# '.string('\v(handles|stack)'))->sort()
-        echomsg l:line
+        echomsg s:ToPrintable(l:line)
     endfor
 endfunction
 
@@ -97,6 +98,10 @@ function s:ToPrintable(value) abort
         let l:output .= (l:nr < 32)? l:ctrl_names[l:nr] : l:char
     endfor
     return l:output
+endfunction
+
+function ToPrintable(value) abort
+    return s:ToPrintable(a:value)
 endfunction
 
 function s:Pad(value, length) abort
@@ -220,34 +225,29 @@ function s:Callback(dummy, ...) abort range
     let l:handle = s:GetHandle(l:type)
     call s:Log(s:Pad('Callback '.s:StackDepth().': ', 16) .'type='.l:type . ' expr='.l:handle['expr']. '    '.s:ToPrintable(s:ReadTypeahead()))
 
-    " Prepare repeat state
-    if l:type !=# 'init'
-        let l:handle['count1'] = ( l:handle['repeat_count'] )? l:handle['repeat_count'] : l:handle['count1']
-        let l:handle['register'] = l:handle['repeat_register']
-        let l:repeat_mode = l:handle['repeat_mode']
+    " " Prepare repeat state
+    " if l:type !=# 'init'
+    "     let l:handle['count1'] = ( l:handle['repeat_count'] )? l:handle['repeat_count'] : l:handle['count1']
+    "     let l:handle['register'] = l:handle['repeat_register']
+    "     let l:repeat_mode = l:handle['repeat_mode']
+    "
+    "     if get(l:handle, 'shift_marks')
+    "         let [ l:handle['v_start'], l:handle['v_end'] ] = s:ShiftToCursor(l:handle['v_start'], l:handle['v_end'])
+    "         let [ l:handle['c_start'], l:handle['c_end'] ] = s:ShiftToCursor(l:handle['c_start'], l:handle['c_end'])
+    "         call setpos("'<", l:handle['v_start'])
+    "         call setpos("'>", l:handle['v_end'])
+    "         call setpos("'[", l:handle['c_start'])
+    "         call setpos("']", l:handle['c_end'])
+    "     endif
+    " endif
 
-        if get(l:handle, 'shift_marks')
-            let [ l:handle['v_start'], l:handle['v_end'] ] = s:ShiftToCursor(l:handle['v_start'], l:handle['v_end'])
-            let [ l:handle['c_start'], l:handle['c_end'] ] = s:ShiftToCursor(l:handle['c_start'], l:handle['c_end'])
-            call setpos("'<", l:handle['v_start'])
-            call setpos("'>", l:handle['v_end'])
-            call setpos("'[", l:handle['c_start'])
-            call setpos("']", l:handle['c_end'])
-        endif
-    endif
-
-    " needed for all ops or just dot because of g@?
+    " NOTE: needed for all ops or just dot because of g@?
+    " set initial state of cursor and vim mode as specified by InitCallback
     silent! execute "normal! \<esc>"
     if l:handle['entry_mode'] ==# 'n'
-        " set cursor position
         call setpos('.', l:handle['cur_start'])
     elseif l:handle['entry_mode'] =~# '\v^[vV]$' && !l:handle['visual_motion']
-        " set visual selection
-        call setpos('.', l:handle['v_start'])
-        let l:selectmode = &selectmode | set selectmode=
-        silent! execute "normal! ".l:handle['v_mode']
-        let &selectmode = l:selectmode
-        call setpos('.', l:handle['v_end'])
+        call s:SetVisualMode(l:handle['v_mode'], l:handle['v_start'], l:handle['v_end'])
     endif
 
     " elseif l:handle['entry_mode'] =~# '\v^(no|nov|noV|no)$'
@@ -349,6 +349,7 @@ function s:ComputeMapRoot(handle) abort
 endfunction
 
 function s:ComputeMapRecur(handle) abort
+    let l:this_expr = a:handle['expr']
     " try
         call s:SetParentCall(a:handle)
         call s:Log(s:Pad('inputsave: ', 16) . s:ReadTypeahead())
@@ -516,6 +517,9 @@ endfunction
 " endfunction
 
 function s:SetParentCall(handle) abort
+    if s:StackDepth() == 1
+        return
+    endif
     " Note: maps don't save which key triggered them, but we can deduce this
     " information with the previous stack frame.
     " Note: the parent (up to this point) is the set complement of previous expr
@@ -777,7 +781,7 @@ endfunction
 function s:ExprWithModifiers(handle) abort
     let a:handle['expr_with_modifiers'] = a:handle['expr']
     if a:handle['accepts_register'] && a:handle['register'] != s:GetDefaultRegister()
-        let a:handle['expr_with_modifiers'] = a:handle['expr_with_modifiers'] a:handle['register']
+        let a:handle['expr_with_modifiers'] = a:handle['expr_with_modifiers'].a:handle['register']
     endif
     if a:handle['accepts_count'] && a:handle['count1'] != 1
         let a:handle['expr_with_modifiers'] = a:handle['count1'].a:handle['expr_with_modifiers']
@@ -906,6 +910,14 @@ endfunction
 function s:GetDefaultRegister() abort
     silent! execute "normal! \<esc>"
     return v:register
+endfunction
+
+function s:SetVisualMode(v_mode, v_start, v_end) abort
+    call setpos('.', a:v_start)
+    let l:selectmode = &selectmode | set selectmode=
+    silent! execute "normal! ".a:v_mode
+    let &selectmode = l:selectmode
+    call setpos('.', a:v_end)
 endfunction
 
 function s:SID() abort
