@@ -1,28 +1,24 @@
+" TODO: create dot specific callback that sets visual mode and then calls op callback
 let s:cpo = &cpo
 set cpo&vim
 
-silent! call op#Load()
-
-if !g:op#no_mappings
-    nmap   . <plug>(dot#dot)
-    vmap   . <plug>(dot#visual_dot)
-    omap   . <plug>(dot#op_pending_dot)
-endif
+call op#Load()
 
 nmap <silent> <plug>(dot#dot) <cmd>call <sid>DotRepeat(v:count, v:register, 'normal')<cr>
 vmap <silent> <plug>(dot#visual_dot) <cmd>call <sid>DotRepeat(v:count, v:register, 'visual')<cr>
 omap <silent><expr> <plug>(dot#op_pending_dot) <sid>DotOpPending()
 
 function dot#Map(map, ...) abort range
-    call s:InitCallback('dot', a:map, 0, s:CheckOptsDict(a:000))
-    let &operatorfunc = op#SID().'Callback'
-    return 'g@'.(mode(1) ==# 'n'? '_' : '')
+    call s:InitCallback(a:map, s:CheckOptsDict(a:000))
+    let &operatorfunc = dot#SID() .. 'ComputeMapCallback'
+    return 'g@' .. (mode(1) ==# 'n'? '_' : '')
 endfunction
 
 function dot#Noremap(map, ...) abort range
     let l:map = s:RegisterNoremap(a:map)
-    call s:InitCallback('dot', l:map, 0, s:CheckOptsDict(a:000))
-    return 'g@'.(mode(1) ==# 'n'? '_' : '')
+    call s:InitCallback(l:map, s:CheckOptsDict(a:000))
+    let &operatorfunc = dot#SID() .. 'ComputeMapCallback'
+    return 'g@' .. (mode(1) ==# 'n'? '_' : '')
 endfunction
 
 function dot#SetMaps(mapping_type, maps, ...) abort range
@@ -36,23 +32,53 @@ function dot#SetMaps(mapping_type, maps, ...) abort range
     endif
 endfunction
 
-function s:CheckOptsDict(vargs) abort
-    execute "return ".op#SID()."CheckOptsDict(a:vargs)"
+function s:ComputeMapCallback(dummy) abort
+    "TODO setup entry mode
+    call s:RestoreEntryMode(s:StackTop())
+    execute 'call ' .. op#SID() .. 'ComputeMapCallback()'
+    let &operatorfunc = dot#SID() .. 'repeatCallback'
+endfunction
+
+function s:repeatCallback(dummy) abort
+    "TODO setup entry mode
+    let l:handle = s:GetHandle('dot')
+    execute 'let expr = ' .. op#SID() .. 'ExprWithModifiers(l:handle)'
+    call feedkeys(l:expr)
 endfunction
 
 function s:DotRepeat(count, register, mode) abort
     let l:handle = s:GetHandle('dot')
-    call s:InitRepeat(l:handle, a:count, a:register, a:mode)
-    execute "normal! ."
+    let l:count1 = (a:count)? a:count : l:handle['mods']['count1']
+    call extend(l:handle, { 'mods' : {
+                \ 'count1': l:count1,
+                \ 'register': a:register,
+                \ } } )
+    call extend(l:handle, { 'repeat_mode' : a:mode } )
+    execute 'normal! .'
+endfunction
+
+function s:RestoreEntryMode(handle) abort
+    let l:init = a:handle['init']
+    let l:marks = a:handle['marks']
+    let l:dot = a:handle['dot']
+    if l:init['entry_mode'] ==# 'n'
+        call setpos('.', l:dot['cur_start'])
+    elseif l:init['entry_mode'] =~# '\v^[vV]$'
+        call s:SetVisualMode(l:init['entry_mode'], l:marks['.'], l:marks['v'])
+    endif
 endfunction
 
 function s:DotOpPending()
     let l:handle = s:GetHandle('dot')
-    if  !empty(l:handle) && !has_key(l:handle, 'abort') && has_key(l:handle, 'input_cache')
-        return l:handle['input_cache'][0]
+    if  !empty(l:handle) && !has_key(l:handle, 'abort') && has_key(l:handle, 'inputs')
+        return join(l:handle['inputs'], '')
     else
         return "\<esc>"
     endif
+endfunction
+
+function s:CheckOptsDict(vargs) abort
+    execute 'return '.. op#SID() .. 'CheckOptsDict(a:vargs)'
 endfunction
 
 function s:SetMap(mapping_type, map, opts) abort
@@ -81,20 +107,45 @@ function s:SetMap(mapping_type, map, opts) abort
 endfunction
 
 function s:RegisterNoremap(map) abort
-    execute "return ".op#SID()."RegisterNoremap(a:map)"
+    execute 'return ' .. op#SID() .. 'RegisterNoremap(a:map)'
 endfunction
 
-function s:InitCallback(op_type, expr, pair, opts) abort
-    execute "call ".op#SID()."InitCallback(a:op_type, a:expr, a:pair, a:opts)"
+function s:InitCallback(expr, opts) abort
+    execute 'let l:handle = ' .. op#SID() .. 'InitCallback("dot", a:expr, a:opts)'
+    call extend(l:handle, { 'marks': {
+                \ '.' : getpos('.'),
+                \ 'v' : getpos('v'),
+                \ "'<" : getpos("'<"),
+                \ "'>" : getpos("'>"),
+                \ "'[" : getpos("'["),
+                \ "']" : getpos("']"),
+                \ } } )
+    call extend(l:handle, { 'dot' : {
+                \ 'v_mode' : visualmode(),
+                \ 'cur_start' : getcurpos(),
+                \ } } )
+endfunction
+
+function s:StackTop() abort
+    execute 'return ' .. op#SID() .. 'StackTop()'
 endfunction
 
 function s:GetHandle(op_type) abort
-    execute "return ".op#SID()."GetHandle(a:op_type)"
+    execute 'return ' .. op#SID() .. 'GetHandle(a:op_type)'
 endfunction
 
-function s:InitRepeat(handle, count, register, mode) abort
-    execute "call ".op#SID()."InitRepeat(a:handle, a:count, a:register, a:mode)"
+function s:SetVisualMode(v_mode, v_start, v_end) abort
+    execute 'call ' .. op#SID() .. 'SetVisualMode(a:v_mode, a:v_start, a:v_end)'
 endfunction
+
+function s:SID() abort
+    return '<SNR>' .. matchstr(expand('<sfile>'), '<SNR>\zs\d\+\ze_SID$') .. '_'
+endfunction
+
+function dot#SID() abort
+    return s:SID()
+endfunction
+
 
 let &cpo = s:cpo
 unlet s:cpo

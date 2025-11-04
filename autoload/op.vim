@@ -1,8 +1,28 @@
 let s:cpo = &cpo
 set cpo&vim
 
+function op#Load() abort
+    " dummy functions to autoload modules
+    silent! call dot#load()
+    silent! call pair#load()
+
+    if !g:op#no_mappings
+        nmap   . <plug>(dot#dot)
+        vmap   . <plug>(dot#visual_dot)
+        omap   . <plug>(dot#op_pending_dot)
+
+        nmap   ; <plug>(pair#next)
+        vmap   ; <plug>(pair#visual_next)
+        omap   ; <plug>(pair#op_pending_next)
+
+        nmap   , <plug>(pair#previous)
+        vmap   , <plug>(pair#visual_previous)
+        omap   , <plug>(pair#op_pending_previous)
+    endif
+endfunction
+
 let g:op#disable_expr_assert         = !exists('g:op#disable_expr_assert')         ? 0       : g:op#disable_expr_assert
-let g:op#max_input_size              = !exists('g:op#max_input_size')              ? 1024    : g:op#max_input_size
+let g:op#max_input_size              = !exists('g:op#max_input_size')              ? 5    : g:op#max_input_size
 let g:op#no_mappings                 = !exists('g:op#no_mappings')                 ? 0       : g:op#no_mappings
 let g:op#cursor_highlight_fallback   = !exists('g:op#cursor_highlight_fallback')   ? 'Error' : g:op#cursor_highlight_fallback
 
@@ -17,13 +37,19 @@ let g:op#map_defaults = {
 
 " must be single character
 let s:hijack_probe = '×'
-let s:hijack = {'mode': '_NULL_', 'cmd': '_NULL_', 'cmd_type': '_NULL_' }
+let s:hijack_esc = repeat("\<esc>", 10)
+let s:hijack = {'mode': '', 'cmd': '', 'cmd_type': '' }
+let s:input_stream = ''
+let s:ambiguous_map_chars = ''
+let s:inputs = []
+" let s:default_register = ''
 
 let s:stack = []
-let s:stack_copy = []
 let s:handles = { 'op': {}, 'dot': {}, 'pair': {} }
 let s:error_log = []
 
+let s:stack_copy = []
+let g:stack_copy = s:stack_copy
 let g:handles = s:handles
 let g:stack = s:stack
 
@@ -44,13 +70,13 @@ function op#PrintScriptVars() abort range
     for l:line in execute('let g:')->split("\n")->filter('v:val =~# '.string('\v^op#'))->sort()
         echomsg 'g:'.l:line
     endfor
-    " if s:StackDepth() > 0
-    if len(s:stack_copy) > 0
-        for l:handle in s:GetStack()
-            echomsg ' '
-            call s:PrintDict(l:handle, '')
-        endfor
-    endif
+    for l:handle in s:GetStack()
+        if len(l:handle) == 1 && has_key(l:handle, 'stack_level')
+            continue
+        endif
+        echomsg ' '
+        call s:PrintDict(l:handle, '')
+    endfor
     for [ l:op_type, l:handle ] in items(s:handles)
         if !empty(l:handle)
             echomsg ' '
@@ -68,7 +94,7 @@ function s:PrintDict(dict, prefix) abort
     let l:prefix = l:stack_prefix .. a:prefix
     for l:key in a:dict->keys()->sort()
         if type(a:dict[l:key]) == v:t_dict
-            " call s:PrintDict(a:dict[l:key], l:prefix.'['.l:key.']')
+            call s:PrintDict(a:dict[l:key], l:prefix.'['.l:key.']')
             continue
         endif
         let l:value = s:FormatValue( l:key, a:dict[l:key] )
@@ -76,16 +102,20 @@ function s:PrintDict(dict, prefix) abort
     endfor
 endfunction
 
+function PrintDict(dict) abort
+    call s:PrintDict(a:dict, '')
+endfunction
+
 
 function s:FormatValue(key, value) abort
     let l:value = deepcopy(a:value)
     if type(a:value) == v:t_string
         let l:value = s:ToPrintable(a:value)
-    elseif type(a:value) == v:t_list && type(a:value[0]) == v:t_string
+    elseif type(a:value) == v:t_list && !empty(a:value) && type(a:value[0]) == v:t_string
         call map(l:value, 's:ToPrintable(v:val)')
     endif
 
-    if a:key ==# 'input_cache'
+    if a:key ==# 'inputs'
         let l:value = '[' . join(l:value, ', ') . ']'
     endif
     return l:value
@@ -105,10 +135,6 @@ function s:ToPrintable(value) abort
         let l:output .= (l:nr < 32)? l:ctrl_names[l:nr] : l:char
     endfor
     return l:output
-endfunction
-
-function ToPrintable(value) abort
-    return s:ToPrintable(a:value)
 endfunction
 
 function s:Pad(value, length) abort
@@ -160,15 +186,15 @@ endfunction
 
 function op#Map(map, ...) abort range
     call s:AssertExprMap()
-    call s:InitCallback('op', a:map, 0, s:CheckOptsDict(a:000))
-    return "\<cmd>call ".op#SID()."Callback('', 'init')\<cr>"
+    call s:InitCallback('op', a:map, s:CheckOptsDict(a:000))
+    return "\<cmd>call ".op#SID()."ComputeMapCallback()\<cr>"
 endfunction
 
 function op#Noremap(map, ...) abort range
     call s:AssertExprMap()
     let l:map = s:RegisterNoremap(a:map)
-    call s:InitCallback('op', l:map, 0, s:CheckOptsDict(a:000))
-    return "\<cmd>call ".op#SID()."Callback('', 'init')\<cr>"
+    call s:InitCallback('op', l:map, s:CheckOptsDict(a:000))
+    return "\<cmd>call ".op#SID()."ComputeMapCallback()\<cr>"
 endfunction
 
 function s:AssertMode() abort
@@ -178,328 +204,236 @@ function s:AssertMode() abort
 endfunction
 
 function s:RegisterNoremap(map) abort
-    call s:AssertMode()
-    let l:mode = mode(1)
-    if l:mode ==# 'n'
-        let l:noremap = 'nnoremap'
-    elseif l:mode =~# '\v^[vV]$'
-        let l:noremap = 'xnoremap'
-    elseif l:mode =~# '\v^no.=$'
-        let l:noremap = 'onoremap'
-    else
-        throw 'cyclops.vim: impossible state in s:RegisterNoremap reached'
-    endif
     let l:map_string = '<plug>(op#_noremap_'.a:map.')'
     if empty(maparg(l:map_string))
-        execute l:noremap.' <silent> '.l:map_string.' '.a:map
+        execute 'noremap <silent> ' .. l:map_string .. ' ' .. a:map
     endif
     return "\<plug>(op#_noremap_".a:map.')'
 endfunction
 
-function s:InitCallback(op_type, expr, pair, opts) abort
+function s:InitCallback(op_type, expr, opts) abort
     call s:AssertMode()
     call s:StackInit()
     let l:handle = s:StackTop()
+
     call extend(l:handle, { 'opts' : a:opts } )
     call extend(l:handle, { 'init' : {
-                \ 'count1': v:count1,
-                \ 'register': v:register,
                 \ 'op_type': a:op_type,
-                \ 'entry_mode': mode(1),
-                \ 'cur_start': getcurpos(),
-                \ 'v_mode': visualmode(),
-                \ 'v_start': getpos("'<"),
-                \ 'v_end': getpos("'>"),
-                \ 'c_start': getpos("'["),
-                \ 'c_end': getpos("']"),
+                \ 'entry_mode' : mode(1),
                 \   } } )
+    call extend(l:handle, { 'mods' : {
+                \ 'count1' : v:count1,
+                \ 'register' : v:register,
+                \ } } )
     call extend(l:handle, {
                 \ 'expr_orig': a:expr,
                 \ 'expr_reduced': a:expr,
                 \ 'expr_reduced_so_far': '',
                 \ 'input_source': (a:opts['consumes_typeahead']? 'typeahead': 'user'),
                 \ })
-    if a:op_type ==# 'pair'
-        call extend(l:handle, {
-                    \ 'expr_reduced': a:pair[a:expr],
-                    \ 'pair': a:pair,
-                    \ 'pair_id': a:expr,
-                    \ 'pair_state': ['invalid', 'invalid']
-                    \ })
-    endif
+    return l:handle
 endfunction
 
-function s:Callback(dummy, ...) abort range
-    call s:StackClearIfAborted()
-    let l:type = s:GetSource(a:000)
-    let l:handle = s:GetHandle(l:type)
-    call s:Log(s:Pad('Callback '.s:StackDepth().': ', 16) .'type='.l:type . ' expr='.l:handle['expr_reduced']. '    '.s:ToPrintable(s:ReadTypeahead()))
+function s:ComputeMapCallback() abort range
+    let l:handle = s:StackTop()
+    call s:Log(s:Pad('Callback ' .. s:StackDepth() .. ': ', 16) .. ' expr=' .. l:handle['expr_orig'] .. ' typeahead=' .. s:ReadTypeahead())
 
-    " " Prepare repeat state
-    " if l:type !=# 'init'
-    "     let l:handle['count1'] = ( l:handle['repeat_count'] )? l:handle['repeat_count'] : l:handle['count1']
-    "     let l:handle['register'] = l:handle['repeat_register']
-    "     let l:repeat_mode = l:handle['repeat_mode']
-    "
-    "     if get(l:handle['opts'], 'shift_marks')
-    "         let [ l:handle['v_start'], l:handle['v_end'] ] = s:ShiftToCursor(l:handle['v_start'], l:handle['v_end'])
-    "         let [ l:handle['c_start'], l:handle['c_end'] ] = s:ShiftToCursor(l:handle['c_start'], l:handle['c_end'])
-    "         call setpos("'<", l:handle['v_start'])
-    "         call setpos("'>", l:handle['v_end'])
-    "         call setpos("'[", l:handle['c_start'])
-    "         call setpos("']", l:handle['c_end'])
-    "     endif
-    " endif
-
-    " NOTE: needed for all ops or just dot because of g@?
-    " set initial state of cursor and vim mode as specified by InitCallback
-
-    " elseif l:handle['entry_mode'] =~# '\v^(no|nov|noV|no)$'
-    "     let l:handle['operator'] = v:operator
-
-
-    " first call in nested maps
-    if s:StackDepth() == 1 || l:type !=# 'init'
-        call s:SetVimMode(l:handle)
-    endif
-
-    if l:type ==# 'init'
-        call s:ComputeMapStack(l:handle)
-    else
-        call s:ExecuteMap(l:handle, s:ExprWithModifiers(l:handle))
-    endif
-
-    " " visual motion (stay in visual mode if we started there)
-    " call extend(l:handle, {'cur_end': getcurpos()})
-    " if l:handle['opts']['visual_motion'] && l:handle['entry_mode'] =~# '\v^[vV]$' && mode(1) ==# 'n'
-    "     let l:selectmode = &selectmode | set selectmode=
-    "     silent! execute "normal! gv"
-    "     let &selectmode = l:selectmode
-    "     call setpos('.', l:handle['cur_end'])
-    " endif
-    "
-    " if l:handle['op_type'] =~# '\v^(dot|pair)$'
-    "     let l:mode = mode(1)
-    "     if l:mode !~# '\v^[nvV]$'
-    "         throw 'cyclops.vim: Unexpected exit mode'
-    "     endif
-    "
-    "     " let l:win = winsaveview()
-    "     " let l:selectmode = &selectmode | set selectmode=
-    "     " silent! execute "normal! \<esc>gv"
-    "     " let &selectmode = l:selectmode
-    "     " call extend(l:handle, {'v_mode': visualmode(), 'v_start': getpos('v'), 'v_end': getpos('.')} )
-    "     " if l:mode ==# 'n'
-    "     "     silent! execute "normal! \<esc>"
-    "     "     call winrestview(l:win)
-    "     " endif
-    " endif
-
-    " STORE HANDLE
     if s:StackDepth() == 1
-        let l:name = l:handle['init']['op_type']
-        let l:stored_handle = deepcopy(l:handle)
-        call remove(l:stored_handle, 'stack_level')
-        let s:handles[l:name] = l:stored_handle
-        call s:PopStack()
-    endif
+        call s:StackClearIfAborted()
+        let s:ambiguous_map_chars = s:StealTypeahead()
 
-    " pair handling
-    if l:handle['init']['op_type'] ==# 'pair'
-        let l:stored_handle = s:GetHandle('pair')
-        let l:pair_id = l:handle['pair_id']
-
-        let l:stored_handle['pair'][l:pair_id] = l:handle['expr_reduced']
-        let l:stored_handle['pair_state'][l:pair_id] = 'valid'
-        let l:stored_handle['pair_id'] = (l:type !=# 'init')? !l:pair_id : l:pair_id
-    endif
-
-    let &operatorfunc = a:0? &operatorfunc : op#SID().'Callback'
-    unsilent echo
-endfunction
-
-function s:ComputeMapStack(handle) abort
-    if s:StackDepth() == 1
-        call s:ComputeMapRoot(a:handle)
+        " recursion begins here
+        call s:HijackInput(l:handle)
     else
-        call s:ComputeMapRecur(a:handle)
+        call s:ComputeMapRecur(l:handle)
     endif
 
-    " if s:StackDepth() == 1 && !empty(s:error_log)
-    "     echohl ErrorMsg | echomsg s:error_log[0] | echohl None
-    "     echohl ErrorMsg | echomsg s:error_log[1] | echohl None
-    "     let s:error_log = []
-    "     echoerr 'cyclops.vim: Error detected, see messages'
-    " endif
-endfunction
-
-function s:ComputeMapRoot(handle) abort
-    " try
-        let l:state = s:SaveState()
-        " let l:ambiguous_map_chars = s:StealTypeahead()
-        let l:ambiguous_map_chars = ''
-
-        "only stored for debugging
-        let a:handle['ambiguous_map'] = l:ambiguous_map_chars
-
-        call s:HijackInput(a:handle, l:ambiguous_map_chars)
-        call s:ExecuteMap(a:handle, a:handle['expr_reduced'])
-
-        " operator pending case
-        " call s:SetOpMode(a:handle)
-        " let l:op = (a:handle['entry_mode'] =~# '\v^no[vV]=$')? get(a:handle, 'operator', '').get(a:handle, 'op_mode', '') : ''
-        let l:op = ''
-
-        let l:expr = l:op . s:ExprWithModifiers(a:handle)
-        " if a:handle['expr_reduced'] !=# l:expr
-            " call s:RestoreState(l:state)
-            call s:ExecuteMap(a:handle, l:expr)
-        " endif
-    " catch /^op#abort$/
-    "     call s:RestoreState(l:state)
-    " endtry
+    if s:StackDepth() == 1
+        let l:expr = s:ExprWithModifiers(l:handle)
+        call feedkeys(l:expr .. s:ambiguous_map_chars)
+        call s:StoreHandle(l:handle)
+        unsilent echo
+    endif
 endfunction
 
 function s:ComputeMapRecur(handle) abort
-    let l:this_expr = a:handle['expr_reduced']
-    " try
-        call s:SetParentCall(a:handle)
-        call s:Log(s:Pad('inputsave: ', 16) . s:ReadTypeahead())
-        call inputsave()
-        call s:HijackInput(a:handle, '')
-        call s:ExecuteMap(a:handle, a:handle['expr_reduced'])
-
-        call s:UpdateParentExpr(a:handle)
-        call inputrestore()
-    " catch /^op#abort$/
-    "     let l:parent = s:GetStackPrev(a:handle)
-    "     let l:parent['abort'] = a:handle['abort']
-    "     throw 'op#abort'
-    " endtry
+    call s:SetParentCall(a:handle)
+    call inputsave()
+    call s:HijackInput(a:handle)
+    call s:ExecuteMap(a:handle, a:handle['expr_reduced'])
+    call s:UpdateParentExpr(a:handle)
+    call inputrestore()
 endfunction
 
-function s:HijackInput(handle, ambiguous_map_chars) abort
-    let s:hijack['mode'] = 'no'
-    call extend(a:handle, { 'hijack_stream': '' })
-    for l:char in split(a:ambiguous_map_chars, '\zs')
-        call s:Log('HANDLE AMBIGUOUS MAP CHARS')
-        call s:UpdateHijackStream(a:handle, s:hijack['mode'], char2nr(l:char))
-    endfor
+function s:HijackInput(handle) abort
+    call s:HijackProbe(a:handle['expr_orig'])
     let l:expr = a:handle['expr_reduced']
-    let l:state = s:SaveState()
-    call s:Log(s:Pad('HijackInput :', 16) . 'l:expr = '.l:expr)
-    let a:handle['expr_reduced'] = l:expr.a:handle['hijack_stream']
-    call s:HijackProbe(a:handle)
-    if a:handle['input_source'] ==# 'input_cache' && s:hijack['mode'] =~# '\v^(no.=|i|c)$'
-        call s:Log(s:Pad('HijackInput: ', 16) . 'early return')
-        let a:handle['expr_reduced'] = l:expr .. remove(a:handle['input_cache'], 0)
-        call s:RestoreState(l:state)
-        return
+    let l:operator_mode_pattern = '\v^(no[vV]=|consumed|i|c)$'
+
+    let s:input_stream = ''
+    if a:handle['input_source'] ==# 'input_cache'
+        if s:hijack['mode'] =~# l:operator_mode_pattern
+            let s:input_stream = remove(a:handle['input_cache'], 0)
+        endif
+    else
+
+        " get input from ambiguous maps
+        while !empty(s:ambiguous_map_chars) && s:hijack['mode'] =~# l:operator_mode_pattern
+            let l:ambig_char = strcharpart(s:ambiguous_map_chars, 0, 1)
+            let s:ambiguous_map_chars = strcharpart(s:ambiguous_map_chars, 1)
+            let s:input_stream ..= l:ambig_char
+            call s:HijackProbe(l:expr .. s:input_stream)
+        endwhile
+
+        call s:Log(s:Pad('HijackInput: ', 16) .. 'START' ..' expr=' .. a:handle['expr_reduced'] .. ' typeahead=' .. s:ReadTypeahead() )
+
+        let l:count = 0
+        while s:hijack['mode'] =~# l:operator_mode_pattern
+            if a:handle['input_source'] ==# 'user'
+                let l:char = s:GetCharFromUser(a:handle)
+                let s:input_stream = s:ProcessStream(s:input_stream, l:char)
+            else
+                let l:char = s:GetCharFromTypeahead(a:handle)
+                let s:input_stream ..= l:char
+            endif
+
+            call s:Log(s:Pad('HijackInput: ', 16) .. 'GOT' .. ' char=' .. l:char)
+            call s:HijackProbe(l:expr .. s:input_stream)
+        endwhile
+
+        call s:Log(s:Pad('HijackInput: ', 16) .. 'END' .. ' input_stream=' .. s:input_stream)
+
+        " store
+        if !empty(s:input_stream)
+            call add(s:inputs, s:input_stream)
+        endif
+
     endif
 
-    while s:hijack['mode'] =~# '\v^(no[vV]=|i|c)$'
-        if s:hijack['mode'] =~# '\v^no'
-            while s:hijack['mode'] =~# '\v^no'
-                call s:UpdateHijackStream(a:handle, s:hijack['mode'], s:GetChar(a:handle))
-                let a:handle['expr_reduced'] = l:expr.a:handle['hijack_stream']
-                if s:workaround_f
-                    " Problem: feedkeys('dfa'.s:hijack_probe) ends in operator pending mode
-                    " Workaround: break out of loop early if any of [fFtT] is used
-                    let s:hijack['mode'] = 'n'
-                    let s:workaround_f = 0
-                    break
-                endif
-                call s:RestoreState(l:state)
-                call s:HijackProbe(a:handle)
-            endwhile
-        elseif s:hijack['mode'] ==# 'i'
-            let l:char = s:UpdateHijackStream(a:handle, s:hijack['mode'], s:GetChar(a:handle))
-            execute "normal! a".l:char
-            while l:char != "\<esc>"
-                let l:char = s:UpdateHijackStream(a:handle, s:hijack['mode'], s:GetChar(a:handle))
-                execute "normal! a".l:char
-            endwhile
-            let a:handle['expr_reduced'] = l:expr.a:handle['hijack_stream']
-            call s:HijackProbe(a:handle)
-        elseif s:hijack['mode'] ==# 'c' || s:hijack['cmd'] =~# '\v^[:/?]$'
-            if !s:hijack['mode'] ==# 'c' || !s:hijack['cmd'] =~# '\v^[:/?]$'
-                call s:Log(s:Pad('HijackInput: ', 16) . 'WARNING: Mismatch in command mode hijack state')
-            endif
-            call s:RestoreState(l:state)
-            " call extend(a:handle, { 'hijack_cmd': s:hijack_cmd, 'hijack_cmd_type': s:hijack_cmd_type })
-            let l:char = s:UpdateHijackStream(a:handle, s:hijack['mode'], s:GetChar(a:handle))
-            while l:char != "\<cr>"
-                let l:char = s:UpdateHijackStream(a:handle, s:hijack['mode'], s:GetChar(a:handle))
-            endwhile
-            call setpos('.', a:handle['cur_start'])
-            let a:handle['expr_reduced'] = l:expr.a:handle['hijack_stream']
-            call s:HijackProbe(a:handle)
-        endif
-        let s:workaround_f = 0
+    let a:handle['expr_reduced'] = l:expr .. s:input_stream
 
-        if !empty(a:handle['hijack_stream'])
-            let l:root = s:StackBottom()
-            call extend(l:root, {'input_cache': []}, 'keep')
-            call add(l:root['input_cache'], a:handle['hijack_stream'])
-        endif
-    endwhile
+
+    " while s:hijack['mode'] =~# '\v^(no[vV]=|i|c)$'
+    "     if s:hijack['mode'] =~# '\v^no'
+    "         while s:hijack['mode'] =~# '\v^no'
+    "             call s:AddToInputStream(a:handle, s:hijack['mode'], s:GetChar(a:handle))
+    "             let a:handle['expr_reduced'] = l:expr.a:handle['hijack_stream']
+    "             if s:workaround_f
+    "                 " Problem: feedkeys('dfa'.s:hijack_probe) ends in operator pending mode
+    "                 " Workaround: break out of loop early if any of [fFtT] is used
+    "                 let s:hijack['mode'] = 'n'
+    "                 let s:workaround_f = 0
+    "                 break
+    "             endif
+    "             call s:RestoreState(l:state)
+    "             call s:HijackProbe(a:handle)
+    "         endwhile
+    "     elseif s:hijack['mode'] ==# 'i'
+    "         let l:char = s:AddToInputStream(a:handle, s:hijack['mode'], s:GetChar(a:handle))
+    "         execute "normal! a".l:char
+    "         while l:char != "\<esc>"
+    "             let l:char = s:AddToInputStream(a:handle, s:hijack['mode'], s:GetChar(a:handle))
+    "             execute "normal! a".l:char
+    "         endwhile
+    "         let a:handle['expr_reduced'] = l:expr.a:handle['hijack_stream']
+    "         call s:HijackProbe(a:handle)
+    "     elseif s:hijack['mode'] ==# 'c' || s:hijack['cmd'] =~# '\v^[:/?]$'
+    "         if !s:hijack['mode'] ==# 'c' || !s:hijack['cmd'] =~# '\v^[:/?]$'
+    "             call s:Log(s:Pad('HijackInput: ', 16) . 'WARNING: Mismatch in command mode hijack state')
+    "         endif
+    "         call s:RestoreState(l:state)
+    "         " call extend(a:handle, { 'hijack_cmd': s:hijack_cmd, 'hijack_cmd_type': s:hijack_cmd_type })
+    "         let l:char = s:AddToInputStream(a:handle, s:hijack['mode'], s:GetChar(a:handle))
+    "         while l:char != "\<cr>"
+    "             let l:char = s:AddToInputStream(a:handle, s:hijack['mode'], s:GetChar(a:handle))
+    "         endwhile
+    "         call setpos('.', a:handle['cur_start'])
+    "         let a:handle['expr_reduced'] = l:expr.a:handle['hijack_stream']
+    "         call s:HijackProbe(a:handle)
+    "     endif
+    "     let s:workaround_f = 0
+    "
+    "     if !empty(a:handle['hijack_stream'])
+    "         let l:root = s:StackBottom()
+    "         call extend(l:root, {'input_cache': []}, 'keep')
+    "         call add(l:root['input_cache'], a:handle['hijack_stream'])
+    "     endif
+    " endwhile
+    "
+    " call s:RestoreState(l:state)
+    " call s:Log(s:Pad('INPUT: ', 16) . a:handle['hijack_stream'])
+endfunction
+
+function s:ProcessStream(stream, char) abort
+    let l:stream = a:stream
+    if a:char == "\<bs>"
+        let l:stream = strcharpart(l:stream, 0, strchars(l:stream)-1)
+    else
+        let l:stream ..= a:char
+    endif
+    return l:stream
+endfunction
+
+function s:AddToInputStream(handle, input_mode, nr) abort
+    let l:char = nr2char(a:nr)
+    let s:input_stream .= l:char
+    return l:char
+
+    " let l:char = nr2char(a:nr)
+    " if a:nr == "\<bs>"
+    "     let a:handle['hijack_stream'] = strcharpart(a:handle['hijack_stream'], 0, strchars(a:handle['hijack_stream'])-1)
+    "     let l:char = "\<bs>"
+    " elseif l:char == "\<c-v>"
+    "     let l:literal = nr2char(s:GetChar(a:handle))
+    "     let l:char = (a:input_mode ==# 'i')? l:char.l:literal : l:literal
+    "     let a:handle['hijack_stream'] .= l:char
+    " elseif l:char == "\<esc>"
+    "     if a:input_mode !=# 'i'
+    "         let a:handle['abort'] = '<esc>'
+    "         throw 'op#abort'
+    "     else
+    "         let a:handle['hijack_stream'] .= l:char
+    "     endif
+    " elseif l:char == "\<c-c>"
+    "     let a:handle['abort'] = 'interrupt (<c-c>)'
+    "     throw 'op#abort'
+    " elseif l:char == '.'
+    "     if a:input_mode =~# '\v^no[vV]=$'
+    "         let l:dot_handle = s:GetHandle('dot')
+    "         if  !empty(l:dot_handle) && !has_key(l:dot_handle, 'abort') && has_key(l:dot_handle, 'input_cache')
+    "             let l:char = l:dot_handle['input_cache'][0]
+    "         else
+    "             let l:char = "\<esc>"
+    "         endif
+    "     endif
+    "     let a:handle['hijack_stream'] .= l:char
+    " else
+    "     let a:handle['hijack_stream'] .= l:char
+    " endif
+    " return l:char
+endfunction
+
+function s:HijackProbe(expr) abort
+    let l:state = s:SaveState()
+
+    " HijackProbMap may be consumed instead of expanded, set default case
+    let s:hijack = {'mode': 'consumed', 'cmd': '', 'cmd_type': '' }
+
+    " let [ l:belloff, l:timeout, l:timeoutlen ] = [ &belloff, &timeout, &timeoutlen ]
+    " set belloff+=error,esc timeout timeoutlen=0
+    call s:PushStack('HijackProbe: expr=' .. a:expr .. ' typeahead=' .. s:ReadTypeahead())
+    " try
+        " feedkeys(..., 'x') is not working as expected, only last map in
+        " stack is processed, execution order is seemingly broken (logging at
+        " callback entry doesn't show beginning/intermediate maps)
+        silent call feedkeys(a:expr .. s:hijack_probe .. s:hijack_esc, 'x!')
+        " silent call feedkeys(a:expr .. s:hijack_probe, 'x')
+    " catch
+    " endtry
+    call s:PopStack('HijackProbe: mode=' .. s:hijack['mode'] .. ' cmd=' .. s:ToPrintable(s:hijack['cmd']) .. ' cmd_type=' .. s:hijack['cmd_type'] .. ' typeahead=' .. s:ReadTypeahead())
+    " let [ &belloff, &timeout, &timeoutlen ] = [ l:belloff, l:timeout, l:timeoutlen ]
 
     call s:RestoreState(l:state)
-    call s:Log(s:Pad('INPUT: ', 16) . a:handle['hijack_stream'])
-endfunction
-
-function s:UpdateHijackStream(handle, input_mode, nr) abort
-    let l:char = nr2char(a:nr)
-    if a:nr == "\<bs>"
-        let a:handle['hijack_stream'] = strcharpart(a:handle['hijack_stream'], 0, strchars(a:handle['hijack_stream'])-1)
-        let l:char = "\<bs>"
-    elseif l:char == "\<c-v>"
-        let l:literal = nr2char(s:GetChar(a:handle))
-        let l:char = (a:input_mode ==# 'i')? l:char.l:literal : l:literal
-        let a:handle['hijack_stream'] .= l:char
-    elseif l:char == "\<esc>"
-        if a:input_mode !=# 'i'
-            let a:handle['abort'] = '<esc>'
-            throw 'op#abort'
-        else
-            let a:handle['hijack_stream'] .= l:char
-        endif
-    elseif l:char == "\<c-c>"
-        let a:handle['abort'] = 'interrupt (<c-c>)'
-        throw 'op#abort'
-    elseif l:char == '.'
-        if a:input_mode =~# '\v^no[vV]=$'
-            let l:dot_handle = s:GetHandle('dot')
-            if  !empty(l:dot_handle) && !has_key(l:dot_handle, 'abort') && has_key(l:dot_handle, 'input_cache')
-                let l:char = l:dot_handle['input_cache'][0]
-            else
-                let l:char = "\<esc>"
-            endif
-        endif
-        let a:handle['hijack_stream'] .= l:char
-    else
-        let a:handle['hijack_stream'] .= l:char
-    endif
-    return l:char
-endfunction
-
-function s:HijackProbe(handle) abort
-    let l:mode_at_start = s:hijack['mode']
-
-    let s:hijack = {'mode': '_NULL_', 'cmd': '_NULL_', 'cmd_type': '_NULL_' }
-    let [ l:belloff, l:timeout, l:timeoutlen ] = [ &belloff, &timeout, &timeoutlen ]
-    set belloff+=error,esc timeout timeoutlen=0
-    call s:PushStack()
-    try
-        call s:Log(s:Pad('HijackProbe: ', 16) . ' FEEDKEYS: '.a:handle['expr_reduced'].s:hijack_probe)
-        silent! call feedkeys(a:handle['expr_reduced'] . s:hijack_probe, 'x!')
-    catch
-    endtry
-    call s:PopStack()
-    let [ &belloff, &timeout, &timeoutlen ] = [ l:belloff, l:timeout, l:timeoutlen ]
-    let s:hijack['mode'] = (s:hijack['mode'] ==# '_NULL_')? l:mode_at_start : s:hijack['mode']
-    let s:hijack['cmd_type'] = (s:hijack['cmd_type'] ==# '_NULL_')? '' : s:hijack['cmd_type']
-    let s:hijack['cmd'] = (s:hijack['cmd'] ==# '_NULL_')? '' : s:hijack['cmd']
     " if has_key(a:handle, 'abort')
     "     throw 'op#abort'
     " endif
@@ -510,13 +444,8 @@ endfunction
 execute 'noremap  <expr>'.s:hijack_probe.' <sid>HijackProbeMap()'
 execute 'noremap! <expr>'.s:hijack_probe.' <sid>HijackProbeMap()'
 function s:HijackProbeMap() abort
-    call s:Log(s:Pad('HijackProbeMap: ', 16) . 'mode='.mode(1).' cmd='.s:ToPrintable(getcmdline()).' type='.getcmdtype())
     let s:hijack = {'mode': mode(1), 'cmd': getcmdline(), 'cmd_type': getcmdtype() }
-    return "\<esc>"
-endfunction
-
-function s:ResolveAmbiguousMap(handle, typeahead) abort
-    let a:handle['ambiguous_map'] = a:typeahead
+    return ''
 endfunction
 
 " function s:SetOpMode(handle) abort
@@ -542,32 +471,22 @@ function s:SetParentCall(handle) abort
     let l:parent_handle = s:GetStackPrev(a:handle)
     let l:calling_expr = l:parent_handle['expr_reduced']
 
+    " remove remnants of hijack_probe .. hijack_esc placed by HijackInput
+    let l:typeahead = s:ReadTypeahead()
 
-    " call s:Log(s:Pad('SetParentCall: ', 16) .'parent expr='.l:calling_expr)
-    " call s:Log(s:Pad('SetParentCall: ', 16) .'  typeahead='.s:ReadTypeahead())
+    let l:typeahead = substitute(l:typeahead, '\V' .. "\<esc>" .. '\+\$', '', '')
+    let l:typeahead = substitute(l:typeahead, '\V' .. s:hijack_probe .. '\$', '', '')
 
-    " remove hijack_probe placed by HijackInput
-    let l:typeahead = substitute(s:ReadTypeahead(), '\V'.s:hijack_probe.'\$', '', '')
-    " call s:Log(s:Pad('SetParentCall: ', 16) .'  typeahead='.l:typeahead)
-
-    " remove matching typeahead from calling_expr
-    " call s:Log(s:Pad('SetParentCall: ', 16) . 'l:calling_expr='.l:calling_expr)
-    " let l:calling_expr = matchstr(l:calling_expr, '\V\.\*\ze\('."\<plug>".'\)\='.escape(l:typeahead, '\'))
-
+    " call s:Log(s:Pad('SetParentCall: ', 16) .. 'calling_expr=' .. l:calling_expr .. ' typeahead=' .. escape(l:typeahead, '\'))
 
     " calling_expr = [already executed] . [current map call]
-    let l:calling_expr = substitute(l:calling_expr, '\V'.escape(l:typeahead, '\').'\$', '', '')
+    let l:calling_expr = substitute(l:calling_expr, '\V' .. escape(l:typeahead, '\') .. '\$', '', '')
 
-    " call s:Log(s:Pad('SetParentCall: ', 16) . 'l:calling_expr='.l:calling_expr)
-    " call s:Log(s:Pad('SetParentCall: ', 16) ."parent expr_reduced_so_far=".l:parent_handle['expr_reduced_so_far'])
-
-
-
-
+    " call s:Log(s:Pad('SetParentCall: ', 16) .. 'calling_expr=' .. l:calling_expr .. ' typeahead=' .. l:typeahead)
 
     " calling_expr = [current map call]
-    let l:calling_expr = substitute(l:calling_expr, '\V\^'.escape(l:parent_handle['expr_reduced_so_far'], '\'), '', '')
-    " call s:Log(s:Pad('SetParentCall: ', 16) . 'l:calling_expr='.l:calling_expr)
+    let l:calling_expr = substitute(l:calling_expr, '\V\^' .. escape(l:parent_handle['expr_reduced_so_far'], '\'), '', '')
+    " call s:Log(s:Pad('SetParentCall: ', 16) .. 'calling_expr=' .. l:calling_expr)
 
     " remove keys that are not managed by this plugin
     let l:parent_call = l:calling_expr
@@ -581,13 +500,13 @@ function s:SetParentCall(handle) abort
         let l:mode = 'o'
     endif
     let l:count = 0
-    while l:parent_call != '' && empty(maparg(substitute(l:parent_call, '\V'."\<plug>", '\<plug>', 'g'), l:mode))
+    while l:parent_call != '' && empty(maparg(substitute(l:parent_call, '\V' .. "\<plug>", '\<plug>', 'g'), l:mode))
         let l:count += 1
         let l:parent_call = strcharpart(l:calling_expr, l:count)
     endwhile
-    call s:Log(s:Pad('SetParentCall: ', 16) . ' parent_call='.l:parent_call . '    parent_expr_reduced_so_far+='.strcharpart(l:calling_expr, 0, l:count))
+    call s:Log(s:Pad('SetParentCall: ', 16) .. ' parent_call=' .. l:parent_call .. '    parent_expr_reduced_so_far+=' .. strcharpart(l:calling_expr, 0, l:count))
     let a:handle['parent_call'] = l:parent_call
-    let l:parent_handle['expr_reduced_so_far'] .= strcharpart(l:calling_expr, 0, l:count)
+    let l:parent_handle['expr_reduced_so_far'] ..= strcharpart(l:calling_expr, 0, l:count)
 endfunction
 
 function s:UpdateParentExpr(handle) abort
@@ -630,14 +549,10 @@ function s:RestoreState(state) abort
     while a:state['last_undo'] < undotree()['seq_cur']
         silent undo
     endwhile
-    silent! execute "normal! \<esc>"
     if l:mode =~# '\v^[nvVsS]$'
-        call setpos('.', a:state['v_start'])
-        let l:selectmode = &selectmode | set selectmode=
-        silent! execute "normal! ".a:state['v_mode']
-        let &selectmode = l:selectmode
-        call setpos('.', a:state['v_end'])
+        call s:SetVisualMode(a:state['v_mode'], a:state['v_start'], a:state['v_end'])
     elseif l:mode =~# '\v^no.=$'
+        silent! execute "normal! \<esc>"
         call setpos("'<", a:state['v_start'])
         call setpos("'>", a:state['v_end'])
     endif
@@ -650,50 +565,41 @@ function s:RestoreState(state) abort
     call winrestview(a:state['win'])
 endfunction
 
-function s:GetChar(handle) abort
-    if a:handle['input_source'] ==# 'user'
-        let l:nr = s:GetCharShowCursor(a:handle)
-    elseif a:handle['input_source'] ==# 'typeahead'
-        call inputrestore()
-        let l:nr = getchar(0)
-        let l:char = nr2char(l:nr)
-        if l:char ==# s:hijack_probe
-            call feedkeys(s:hijack_probe, 'i')
-        endif
-        call inputsave()
-
-        " if a:handle['stack_level'] > 0
-            let [ l:handle, l:parent_handle ] = [ a:handle, s:GetStackPrev(a:handle) ]
-            let l:parent_typeahead = matchstr(l:parent_handle['expr_reduced'], '\V'.l:handle['parent_call'].'\zs\.\*')
-            " TODO: remove 'stack_level' usage
-            while l:handle['stack_level'] > 1 && empty(l:parent_typeahead)
-                let [ l:handle, l:parent_handle ] = [ s:GetStackPrev(l:handle), s:GetStackPrev(l:parent_handle) ]
-                let l:parent_typeahead = matchstr(l:parent_handle['expr_reduced'], '\V'.l:handle['parent_call'].'\zs\.\*')
-            endwhile
-            if !empty(l:parent_typeahead)
-                let l:parent_handle['expr_reduced'] = matchstr(l:parent_handle['expr_reduced'], '\V\^\.\{-}'.l:handle['parent_call']).strcharpart(l:parent_typeahead, 1)
-                if  !empty(l:nr) && ( l:char !=# strcharpart(l:parent_typeahead, 0, 1) )
-                    throw 'cyclops.vim: Unexpected error while processing operator'
-                endif
-                let l:char = strcharpart(l:parent_typeahead, 0, 1)
-                let l:nr = char2nr(l:char)
-            endif
-        " endif
-
-        if empty(l:nr) || l:char ==# s:hijack_probe
-            let l:nr = s:GetCharShowCursor(a:handle)
-        endif
-    endif
-    return l:nr
+function s:SetVisualMode(v_mode, v_start, v_end) abort
+    silent! execute "normal! \<esc>"
+    call setpos('.', a:v_start)
+    let l:selectmode = &selectmode | set selectmode=
+    silent! execute "normal! ".a:v_mode
+    let &selectmode = l:selectmode
+    call setpos('.', a:v_end)
 endfunction
 
-function s:GetCharShowCursor(handle) abort
+function s:GetCharFromUser(handle) abort
+    if getchar(1) != 0
+        throw "TYPEAHEAD AVAILABLE"
+    endif
+    try
+        let l:highlights = s:SetHighlights(a:handle)
+        let l:char = getcharstr()
+    catch /^Vim:Interrupt$/
+        throw 'interrupt (<c-c>)'
+        " let l:char = "\<c-c>"
+    finally
+        call s:ClearHighlights(l:highlights)
+    endtry
+
+    if empty(l:char)
+        throw 'empty char received'
+    endif
+
+    return l:char
+endfunction
+
+function s:SetHighlights(handle) abort
     let [ l:match_ids, l:cursor_hl ] = [ [], hlexists('Cursor')? 'Cursor' : g:op#cursor_highlight_fallback ]
-    let l:cursorline = &cursorline
-    if s:hijack['mode'] =~# '\m^no'
-        unsilent echo 'Operator Input:' a:handle['hijack_stream']
+    if s:hijack['mode'] =~# '\v^(no|consumed)$'
+        unsilent echo 'Operator Input:' .. s:input_stream
         if a:handle['init']['entry_mode'] =~# '\v^[vV]$'
-            set nocursorline
             if a:handle['init']['entry_mode'] =~# '\v^[vV]$'
                 call add(l:match_ids, matchadd('Visual', '\m\%>'."'".'<\&\%<'."'".'>\&[^$]'))
                 call add(l:match_ids, matchadd('Visual', '\m\%'."'".'<\|\%'."'".'>'))
@@ -705,7 +611,7 @@ function s:GetCharShowCursor(handle) abort
     elseif s:hijack['mode'] ==# 'i'
         call add(l:match_ids, matchadd(l:cursor_hl, '\%'.line('.').'l\%'.(col('.')+1).'c'))
     elseif s:hijack['mode'] ==# 'c' || s:hijack['cmd_type'] =~# '\v^[:/?]$'
-        let l:input = (s:hijack['cmd_type'] == a:handle['hijack_stream'][0])? a:handle['hijack_stream'][1:] : a:handle['hijack_stream']
+        let l:input = (s:hijack['cmd_type'] == s:input_stream[0])? s:input_stream[1:] : s:input_stream
         if s:hijack['cmd_type'] =~# '\v[/?]' && &incsearch
             nohlsearch
             call add(l:match_ids, matchadd(l:cursor_hl, '\%'.line('.').'l\%'.col('.').'c'))
@@ -715,45 +621,75 @@ function s:GetCharShowCursor(handle) abort
         unsilent echo s:hijack['cmd_type'].s:hijack['cmd'].l:input
     endif
     redraw
-    " try
-        let l:nr = getchar()
-    " catch /^Vim:Interrupt$/
-    "     let l:nr = char2nr("\<c-c>")
-    " endtry
-    let &cursorline = l:cursorline
-    for l:id in l:match_ids
+    return l:match_ids
+endfunction
+
+function s:ClearHighlights(match_ids) abort
+    for l:id in a:match_ids
         if l:id > 0
             call matchdelete(l:id)
         endif
     endfor
-    return l:nr
 endfunction
 
-function s:ExecuteMap(handle, cmd) abort
-    call s:PushStack()
-    let [ l:timeout, l:timeoutlen ] = [ &timeout, &timeoutlen ]
-    set timeout timeoutlen=0
-    " try
-        call s:Log(s:Pad('ExecuteMap: ', 16) . 'cmd='.a:cmd)
-        call feedkeys(a:cmd, 'x')
-    " catch /^op#abort$/
-    "     let a:handle['abort'] = get(a:handle, 'abort', 'graceful')
-    " catch
-    "     call s:Log(s:Pad('ExecuteMap ERROR: ', 16) . 'cmd='.a:cmd)
-    "
-    "     let a:handle['abort'] = 'error'
-    "     call s:LogError(a:cmd)
-    " endtry
-    let [ &timeout, &timeoutlen ] = [ l:timeout, l:timeoutlen ]
-    call s:PopStack()
-    if has_key(a:handle, 'abort')
-        throw 'op#abort'
+function s:GetCharFromTypeahead(handle) abort
+    call inputrestore()
+    let l:nr = getchar(0)
+    let l:char = nr2char(l:nr)
+    if l:char ==# s:hijack_probe
+        call feedkeys(s:hijack_probe, 'i')
     endif
+    call inputsave()
+
+    " traverse stack to find available typeahead (if any)
+    let [ l:handle, l:parent_handle ] = [ a:handle, s:GetStackPrev(a:handle) ]
+    let l:parent_typeahead = matchstr(l:parent_handle['expr_reduced'], '\V'.l:handle['parent_call'].'\zs\.\*')
+    while l:handle['stack_level'] > 1 && empty(l:parent_typeahead)
+        let [ l:handle, l:parent_handle ] = [ s:GetStackPrev(l:handle), s:GetStackPrev(l:parent_handle) ]
+        let l:parent_typeahead = matchstr(l:parent_handle['expr_reduced'], '\V'.l:handle['parent_call'].'\zs\.\*')
+    endwhile
+
+    " consume from parent typeahead if available
+    if !empty(l:parent_typeahead)
+        let l:parent_handle['expr_reduced'] = matchstr(l:parent_handle['expr_reduced'], '\V\^\.\{-}'.l:handle['parent_call']).strcharpart(l:parent_typeahead, 1)
+        if  !empty(l:nr) && ( l:char !=# strcharpart(l:parent_typeahead, 0, 1) )
+            throw 'cyclops.vim: Unexpected error while processing operator'
+        endif
+        let l:char = strcharpart(l:parent_typeahead, 0, 1)
+    endif
+
+    if empty(l:char)
+        throw 'empty char received'
+    endif
+
+    return l:char
 endfunction
+
+" function s:ExecuteMap(handle, expr) abort
+"     call s:PushStack('ExecuteMap')
+"     let [ l:timeout, l:timeoutlen ] = [ &timeout, &timeoutlen ]
+"     set timeout timeoutlen=0
+"     " try
+"     call s:Log(s:Pad('ExecuteMap: ', 16) . 'expr='.a:expr)
+"     call feedkeys(a:expr, 'x')
+"     " catch /^op#abort$/
+"     "     let a:handle['abort'] = get(a:handle, 'abort', 'graceful')
+"     " catch
+"     "     call s:Log(s:Pad('ExecuteMap ERROR: ', 16) . 'expr='.a:expr)
+"     "
+"     "     let a:handle['abort'] = 'error'
+"     "     call s:LogError(a:expr)
+"     " endtry
+"     let [ &timeout, &timeoutlen ] = [ l:timeout, l:timeoutlen ]
+"     call s:PopStack()
+"     if has_key(a:handle, 'abort')
+"         throw 'op#abort'
+"     endif
+" endfunction
 
 function s:ReadTypeahead() abort
     let l:typeahead = s:StealTypeahead()
-    call feedkeys(l:typeahead)
+    call feedkeys(l:typeahead, 'i')
     return l:typeahead
 endfunction
 
@@ -761,13 +697,10 @@ endfunction
 function s:StealTypeahead() abort
     let l:typeahead = ''
     while getchar(1)
-        let l:char = getchar(0)
-        " let l:typeahead .= (l:char ==# "\<plug>")? "\<plug>" : nr2char(l:char)
-        let l:typeahead .= nr2char(l:char)
+        let l:typeahead ..= getcharstr()
         if strchars(l:typeahead) > g:op#max_input_size
-            " call s:Log(s:Pad('STEALTYPEAHEAD: ', 16) . 'TYPEAHEAD OVERFLOW')
-            " call s:Log(s:Pad('', 16) . l:typeahead[0:20].'...')
-            " return l:typeahead[0:20]
+            call s:Log(s:Pad('STEALTYPEAHEAD: ', 16) . 'TYPEAHEAD OVERFLOW')
+            call s:Log(s:Pad('', 16) . l:typeahead[0:20].'...')
             throw 'cyclops.vim: Unexpected error while reading typeahead (incomplete command called in normal mode?)'
         endif
     endwhile
@@ -795,47 +728,57 @@ endfunction
 
 function s:ExprWithModifiers(handle) abort
     let l:opts = a:handle['opts']
-    let l:init = a:handle['init']
+    let l:mods = a:handle['mods']
 
-    let l:expr_with_modifiers = a:handle['expr_reduced']
-    if l:opts['accepts_register'] && l:init['register'] != s:GetDefaultRegister()
-        let l:expr_with_modifiers = l:expr_with_modifiers.l:init['register']
-    endif
-    if l:opts['accepts_count'] && l:init['count1'] != 1
-        let l:expr_with_modifiers = l:init['count1'].l:expr_with_modifiers
+    let l:register = (l:opts['accepts_register'])? '"' .. l:mods['register'] : ''
+    let l:expr_with_modifiers = l:register .. a:handle['expr_reduced']
+
+    if l:opts['accepts_count'] && l:mods['count1'] != 1
+        let l:expr_with_modifiers = l:mods['count1'].l:expr_with_modifiers
     elseif !l:opts['accepts_count']
-        let l:expr_with_modifiers = repeat(l:expr_with_modifiers, l:init['count1'])
+        let l:expr_with_modifiers = repeat(l:expr_with_modifiers, l:mods['count1'])
     endif
+    " stored for debugging
+    let a:handle['expr_with_modifiers'] = l:expr_with_modifiers
+
     return l:expr_with_modifiers
 endfunction
 
-function s:GetSource(vargs) abort
-    if len(a:vargs)
-        return a:vargs[0]
-    else
-        " a:0 == 0 if called from operatorfunc (via g@) from the dop map. In
-        " this case we must determine if it's the first call (initialization) or
-        " a repeat call.
-        return (s:StackDepth() == 0)? 'dot' : 'init'
-    endif
+function s:GetHandle(op_type) abort
+    return s:handles[a:op_type]
 endfunction
 
-function s:GetHandle(op_type) abort
-    return (a:op_type ==# 'init')? s:StackTop() : s:handles[a:op_type]
+function s:StoreHandle(handle) abort
+        let l:handle_to_store = deepcopy(a:handle)
+        call extend(l:handle_to_store, { 'inputs': s:inputs })
+        call remove(l:handle_to_store, 'stack_level')
+
+        let l:name = a:handle['init']['op_type']
+        let s:handles[l:name] = l:handle_to_store
+        call s:PopStack()
 endfunction
 
 function s:StackDepth() abort
     return len(s:stack)
 endfunction
 
-function s:PushStack() abort
-    call s:Log('↓↓↓↓')
-    call add(s:stack, {'stack_level': s:StackDepth()})
-    call add(s:stack_copy, s:stack[-1])
+function s:PushStack(...) abort
+    let l:tag = a:0? a:1 : ''
+
+    call s:Log('↓↓↓↓ ' .. l:tag)
+    let l:frame = {'stack_level': s:StackDepth()}
+    if !empty(l:tag)
+        let l:frame['tag'] = l:tag
+    endif
+
+    " call add(s:stack, {'stack_level': s:StackDepth()})
+    call add(s:stack, l:frame)
+    call add(s:stack_copy, l:frame)
 endfunction
 
-function s:PopStack() abort
-    call s:Log('↑↑↑↑')
+function s:PopStack(...) abort
+    let l:tag = a:0? a:1 : get(s:StackTop(), 'tag', '')
+    call s:Log('↑↑↑↑ ' .. l:tag)
     call remove(s:stack, -1)
 endfunction
 
@@ -845,15 +788,22 @@ function s:StackInit() abort
     endif
     if s:StackDepth() == 0
         let g:log = []
-        let s:stack_copy = []
-        call s:PushStack()
+        let s:ambiguous_map_chars = ''
+        if !empty(s:inputs)
+            call remove(s:inputs, 0, -1)
+        endif
+        if !empty(s:stack_copy)
+            call remove(s:stack_copy, 0, -1)
+        endif
+        call s:PushStack('StackInit')
     endif
 endfunction
 
 function s:StackClearIfAborted() abort
     if s:StackDepth() > 0 && has_key(s:stack[0], 'abort')
         let s:stack = []
-        let s:stack_copy = []
+        " let s:stack_copy = []
+        call remove(s:stack_copy, 0, -1)
     endif
 endfunction
 
@@ -870,11 +820,8 @@ function s:GetStackPrev(handle) abort
 endfunction
 
 function s:GetStack() abort
-    return s:stack_copy
-endfunction
-
-function s:InitRepeat(handle, count, register, mode) abort
-    call extend(a:handle, {'repeat_count': a:count, 'repeat_register': a:register, 'repeat_mode': a:mode })
+    " return s:stack_copy
+    return s:stack
 endfunction
 
 " function s:PrepareRepeat(handle) abort
@@ -926,29 +873,10 @@ function s:GetScreenCol(pos) abort
     return virtcol(a:pos[1:3]) ? virtcol(a:pos[1:3]) : a:pos[2]
 endfunction
 
-function s:GetDefaultRegister() abort
-    silent! execute "normal! \<esc>"
-    return v:register
-endfunction
-
-function s:SetVimMode(handle) abort
-    let l:opts = a:handle['opts']
-    let l:init = a:handle['init']
-    silent! execute "normal! \<esc>"
-    if l:init['entry_mode'] ==# 'n'
-        call setpos('.', l:init['cur_start'])
-    elseif l:init['entry_mode'] =~# '\v^[vV]$' && !l:opts['visual_motion']
-        call s:SetVisualMode(l:init['v_mode'], l:init['v_start'], l:init['v_end'])
-    endif
-endfunction
-
-function s:SetVisualMode(v_mode, v_start, v_end) abort
-    call setpos('.', a:v_start)
-    let l:selectmode = &selectmode | set selectmode=
-    silent! execute "normal! ".a:v_mode
-    let &selectmode = l:selectmode
-    call setpos('.', a:v_end)
-endfunction
+" function s:SetDefaultRegister() abort
+"     silent! execute "normal! \<esc>"
+"     let s:default_register = v:register
+" endfunction
 
 function s:SID() abort
     return '<SNR>'.matchstr(expand('<sfile>'), '<SNR>\zs\d\+\ze_SID$').'_'
