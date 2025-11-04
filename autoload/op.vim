@@ -441,8 +441,8 @@ endfunction
 
 " map the first char of s:hijack_probe to get hijack data
 " Some commands may consume the RHS and start executing, use something unusual
-execute 'noremap  <expr>'.s:hijack_probe.' <sid>HijackProbeMap()'
-execute 'noremap! <expr>'.s:hijack_probe.' <sid>HijackProbeMap()'
+execute 'noremap  <expr>' .. s:hijack_probe .. ' <sid>HijackProbeMap()'
+execute 'noremap! <expr>' .. s:hijack_probe .. ' <sid>HijackProbeMap()'
 function s:HijackProbeMap() abort
     let s:hijack = {'mode': mode(1), 'cmd': getcmdline(), 'cmd_type': getcmdtype() }
     return ''
@@ -529,49 +529,67 @@ endfunction
 function s:SaveState() abort
     let [ l:mode, l:winid, l:win, l:last_undo ] = [ mode(1), win_getid(), winsaveview(), undotree()['seq_cur'] ]
     if l:mode ==# 'n'
-        let l:selectmode = &selectmode | set selectmode=
-        silent! execute "normal! gv"
-        let &selectmode = l:selectmode
-        let [ l:v_mode, l:v_start, l:v_end ] = [ visualmode(), getpos('v'), getpos('.') ]
-        silent! execute "normal! \<esc>"
-    elseif l:mode =~# '\v^[vVsS]$'
-        let [ l:v_mode, l:v_start, l:v_end ] = [ visualmode(), getpos('v'), getpos('.') ]
+        let l:v_state = s:GetVisualState()
+    elseif l:mode =~# '\v^[vV]$'
+        let l:v_state = s:GetVisualState()
     elseif l:mode =~# '\v^no.=$'
-        let [ l:v_mode, l:v_start, l:v_end ] = [ visualmode(), getpos("'<"), getpos("'>") ]
+        " let [ l:v_mode, l:v_start, l:v_end ] = [ visualmode(), getpos("'<"), getpos("'>") ]
+    else
+        throw 'cyclops.vim: unsupported mode '.string(l:mode).' in SaveState'
     endif
     call winrestview(l:win)
-    return { 'mode': l:mode, 'winid': l:winid, 'win': l:win, 'last_undo': l:last_undo, 'v_mode': l:v_mode, 'v_start': l:v_start, 'v_end': l:v_end }
+    return { 'mode': l:mode, 'winid': l:winid, 'win': l:win, 'last_undo': l:last_undo, 'v_state': l:v_state }
 endfunction
 
 function s:RestoreState(state) abort
+    call s:Log('RestoreState: ' .. string(a:state))
     let l:mode = a:state['mode']
     call win_gotoid(a:state['winid'])
     while a:state['last_undo'] < undotree()['seq_cur']
         silent undo
     endwhile
     if l:mode =~# '\v^[nvVsS]$'
-        call s:SetVisualMode(a:state['v_mode'], a:state['v_start'], a:state['v_end'])
+        call s:SetVisualState(a:state['v_state'])
     elseif l:mode =~# '\v^no.=$'
-        silent! execute "normal! \<esc>"
-        call setpos("'<", a:state['v_start'])
-        call setpos("'>", a:state['v_end'])
+        " silent! execute "normal! \<esc>"
+        " call setpos("'<", a:state['v_start'])
+        " call setpos("'>", a:state['v_end'])
     endif
     if l:mode ==# 'n'
         silent! execute "normal! \<esc>"
-    elseif l:mode =~# '\v^[sS]$'
-        let l:char = l:mode ==# 's'? 'h' : (l:mode ==# 'S'? 'H' : '')
-        silent! execute "normal! \<esc>g".l:char
+    " elseif l:mode =~# '\v^[sS]$'
+    "     let l:char = l:mode ==# 's'? 'h' : (l:mode ==# 'S'? 'H' : '')
+    "     silent! execute "normal! \<esc>g".l:char
     endif
     call winrestview(a:state['win'])
 endfunction
 
-function s:SetVisualMode(v_mode, v_start, v_end) abort
-    silent! execute "normal! \<esc>"
-    call setpos('.', a:v_start)
+function s:GetVisualState() abort
+    let l:mode = mode(1)
+    if l:mode !~# '\v^[nvV]$'
+        throw 'cyclops.vim: only normal/vis mode supported'
+    endif
+
     let l:selectmode = &selectmode | set selectmode=
-    silent! execute "normal! ".a:v_mode
+    " exit/re-enter visual mode to get visualmode()
+    silent! execute "normal! \<esc>gv"
     let &selectmode = l:selectmode
-    call setpos('.', a:v_end)
+    let l:v_state = [ visualmode(), getpos('v'), getpos('.') ]
+
+    if l:mode ==# 'n'
+        silent! execute "normal! \<esc>"
+    endif
+    return l:v_state
+endfunction
+
+function s:SetVisualState(v_state) abort
+    let [ l:v_mode, l:v_start, l:v_end ] = a:v_state
+    silent! execute "normal! \<esc>"
+    call setpos('.', l:v_start)
+    let l:selectmode = &selectmode | set selectmode=
+    silent! execute "normal! ".l:v_mode
+    let &selectmode = l:selectmode
+    call setpos('.', l:v_end)
 endfunction
 
 function s:GetCharFromUser(handle) abort
