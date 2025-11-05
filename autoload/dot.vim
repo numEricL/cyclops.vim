@@ -33,10 +33,22 @@ function dot#SetMaps(mapping_type, maps, ...) abort range
 endfunction
 
 function s:ComputeMapCallback(dummy) abort
-    "TODO setup entry mode
     call s:RestoreEntryMode(s:StackTop())
     execute 'call ' .. op#SID() .. 'ComputeMapCallback()'
     let &operatorfunc = dot#SID() .. 'repeatCallback'
+endfunction
+
+function s:DotRepeat(count, register, mode) abort
+    let l:handle = s:GetHandle('dot')
+    if !empty(l:handle) && !has_key(l:handle, 'abort')
+        let l:count1 = (a:count)? a:count : l:handle['mods']['count1']
+        call extend(l:handle, { 'mods' : {
+                    \ 'count1': l:count1,
+                    \ 'register': a:register,
+                    \ } } )
+        call extend(l:handle, { 'repeat_mode' : a:mode } )
+    endif
+    execute 'normal! .'
 endfunction
 
 function s:repeatCallback(dummy) abort
@@ -46,17 +58,6 @@ function s:repeatCallback(dummy) abort
     call feedkeys(l:expr)
 endfunction
 
-function s:DotRepeat(count, register, mode) abort
-    let l:handle = s:GetHandle('dot')
-    let l:count1 = (a:count)? a:count : l:handle['mods']['count1']
-    call extend(l:handle, { 'mods' : {
-                \ 'count1': l:count1,
-                \ 'register': a:register,
-                \ } } )
-    call extend(l:handle, { 'repeat_mode' : a:mode } )
-    execute 'normal! .'
-endfunction
-
 function s:RestoreEntryMode(handle) abort
     let l:init = a:handle['init']
     let l:marks = a:handle['marks']
@@ -64,7 +65,8 @@ function s:RestoreEntryMode(handle) abort
     if l:init['entry_mode'] ==# 'n'
         call setpos('.', l:dot['cur_start'])
     elseif l:init['entry_mode'] =~# '\v^[vV]$'
-        call s:SetVisualMode(l:init['entry_mode'], l:marks['.'], l:marks['v'])
+        let l:v_state = [l:init['entry_mode'], l:marks['v'], l:marks['.']]
+        call s:SetVisualState(l:v_state)
     endif
 endfunction
 
@@ -134,8 +136,8 @@ function s:GetHandle(op_type) abort
     execute 'return ' .. op#SID() .. 'GetHandle(a:op_type)'
 endfunction
 
-function s:SetVisualMode(v_mode, v_start, v_end) abort
-    execute 'call ' .. op#SID() .. 'SetVisualMode(a:v_mode, a:v_start, a:v_end)'
+function s:SetVisualState(v_state) abort
+    execute 'call ' .. op#SID() .. 'SetVisualState(a:v_state)'
 endfunction
 
 function s:SID() abort
