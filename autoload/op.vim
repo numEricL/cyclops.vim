@@ -238,18 +238,12 @@ function s:ComputeMapCallback() abort range
     let l:handle = s:StackTop()
     call s:Log(s:Pad('Callback ' .. s:StackDepth() .. ': ', 16) .. ' expr=' .. l:handle['expr_orig'] .. ' typeahead=' .. substitute(s:ReadTypeahead(), '\m' .. "\<esc>" .. '\+$', "\<esc>", ''))
 
-    if s:StackDepth() == 1
-        call s:StackClearIfAborted()
-        let s:ambiguous_map_chars = s:StealTypeahead()
+    " reduces nested op# exprs with their inputs
+    call s:ComputeMapOnStack(l:handle)
 
-        " recursion begins here
-        call s:HijackInput(l:handle)
-    else
-        call s:ComputeMapRecur(l:handle)
-    endif
-
+    " execute computed map and store handle in case of repeat
     if s:StackDepth() == 1
-        " stored for debugging
+        " expr_with_modifiers stored for debugging
         let l:handle['expr_with_modifiers'] = s:ExprWithModifiers(l:handle)
         call feedkeys(l:handle['expr_with_modifiers'] .. s:ambiguous_map_chars, 'x!')
         if l:handle['opts']['silent']
@@ -259,20 +253,37 @@ function s:ComputeMapCallback() abort range
     endif
 endfunction
 
-function s:ComputeMapRecur(handle) abort
-    call s:SetParentCall(a:handle)
-    call inputsave()
-    call s:HijackInput(a:handle)
-    call feedkeys(a:handle['expr_reduced'], 'x')
-    call s:UpdateParentExpr(a:handle)
-    call inputrestore()
+function s:ComputeMapOnStack(handle) abort
+    if s:StackDepth() == 1
+        call s:StackClearIfAborted()
+        let s:ambiguous_map_chars = s:StealTypeahead()
+
+        " recursion starts here
+        call s:ComputeMapRecursive(a:handle)
+        call s:HijackInput(a:handle)
+
+
+    else
+        call s:SetParentCall(a:handle)
+        call inputsave()
+
+        " recursion continues here
+        call s:ComputeMapRecursive(a:handle)
+        call s:HijackInput(a:handle)
+
+        call feedkeys(a:handle['expr_reduced'], 'x')
+        call s:UpdateParentExpr(a:handle)
+        call inputrestore()
+    endif
 endfunction
 
-function s:HijackInput(handle) abort
+function s:ComputeMapRecursive(handle) abort
     call s:PushStack('HijackProbe: expr=' .. a:handle['expr_orig'] .. ' typeahead=' .. s:ReadTypeahead())
     call s:HijackProbe(a:handle['expr_orig'])
     call s:PopStack('HijackProbe: mode=' .. s:hijack['mode'] .. ' cmd=' .. s:hijack['cmd'] .. ' cmd_type=' .. s:hijack['cmd_type'] .. ' typeahead=' .. s:ReadTypeahead())
+endfunction
 
+function s:HijackInput(handle) abort
     let l:expr = a:handle['expr_reduced']
 
     let s:input_stream = ''
@@ -318,55 +329,6 @@ function s:HijackInput(handle) abort
 
     let a:handle['expr_reduced'] = l:expr .. s:input_stream
 
-    " while s:hijack['mode'] =~# '\v^(no[vV]=|i|c)$'
-    "     if s:hijack['mode'] =~# '\v^no'
-    "         while s:hijack['mode'] =~# '\v^no'
-    "             call s:AddToInputStream(a:handle, s:hijack['mode'], s:GetChar(a:handle))
-    "             let a:handle['expr_reduced'] = l:expr.a:handle['hijack_stream']
-    "             if s:workaround_f
-    "                 " Problem: feedkeys('dfa'.s:hijack_probe) ends in operator pending mode
-    "                 " Workaround: break out of loop early if any of [fFtT] is used
-    "                 let s:hijack['mode'] = 'n'
-    "                 let s:workaround_f = 0
-    "                 break
-    "             endif
-    "             call s:RestoreState(l:state)
-    "             call s:HijackProbe(a:handle)
-    "         endwhile
-    "     elseif s:hijack['mode'] ==# 'i'
-    "         let l:char = s:AddToInputStream(a:handle, s:hijack['mode'], s:GetChar(a:handle))
-    "         execute "normal! a".l:char
-    "         while l:char != "\<esc>"
-    "             let l:char = s:AddToInputStream(a:handle, s:hijack['mode'], s:GetChar(a:handle))
-    "             execute "normal! a".l:char
-    "         endwhile
-    "         let a:handle['expr_reduced'] = l:expr.a:handle['hijack_stream']
-    "         call s:HijackProbe(a:handle)
-    "     elseif s:hijack['mode'] ==# 'c' || s:hijack['cmd'] =~# '\v^[:/?]$'
-    "         if !s:hijack['mode'] ==# 'c' || !s:hijack['cmd'] =~# '\v^[:/?]$'
-    "             call s:Log(s:Pad('HijackInput: ', 16) . 'WARNING: Mismatch in command mode hijack state')
-    "         endif
-    "         call s:RestoreState(l:state)
-    "         " call extend(a:handle, { 'hijack_cmd': s:hijack_cmd, 'hijack_cmd_type': s:hijack_cmd_type })
-    "         let l:char = s:AddToInputStream(a:handle, s:hijack['mode'], s:GetChar(a:handle))
-    "         while l:char != "\<cr>"
-    "             let l:char = s:AddToInputStream(a:handle, s:hijack['mode'], s:GetChar(a:handle))
-    "         endwhile
-    "         call setpos('.', a:handle['cur_start'])
-    "         let a:handle['expr_reduced'] = l:expr.a:handle['hijack_stream']
-    "         call s:HijackProbe(a:handle)
-    "     endif
-    "     let s:workaround_f = 0
-    "
-    "     if !empty(a:handle['hijack_stream'])
-    "         let l:root = s:StackBottom()
-    "         call extend(l:root, {'input_cache': []}, 'keep')
-    "         call add(l:root['input_cache'], a:handle['hijack_stream'])
-    "     endif
-    " endwhile
-    "
-    " call s:RestoreState(l:state)
-    " call s:Log(s:Pad('INPUT: ', 16) . a:handle['hijack_stream'])
 endfunction
 
 function s:CheckForErrors(expr) abort
@@ -391,56 +353,21 @@ function s:ProcessStream(stream, char) abort
     return l:stream
 endfunction
 
-" function s:AddToInputStream(handle, input_mode, nr) abort
-"     let l:char = nr2char(a:nr)
-"     let s:input_stream .= l:char
-"     return l:char
-"
-"     " let l:char = nr2char(a:nr)
-"     " if a:nr == "\<bs>"
-"     "     let a:handle['hijack_stream'] = strcharpart(a:handle['hijack_stream'], 0, strchars(a:handle['hijack_stream'])-1)
-"     "     let l:char = "\<bs>"
-"     " elseif l:char == "\<c-v>"
-"     "     let l:literal = nr2char(s:GetChar(a:handle))
-"     "     let l:char = (a:input_mode ==# 'i')? l:char.l:literal : l:literal
-"     "     let a:handle['hijack_stream'] .= l:char
-"     " elseif l:char == "\<esc>"
-"     "     if a:input_mode !=# 'i'
-"     "         let a:handle['abort'] = '<esc>'
-"     "         throw 'op#abort'
-"     "     else
-"     "         let a:handle['hijack_stream'] .= l:char
-"     "     endif
-"     " elseif l:char == "\<c-c>"
-"     "     let a:handle['abort'] = 'interrupt (<c-c>)'
-"     "     throw 'op#abort'
-"     " elseif l:char == '.'
-"     "     if a:input_mode =~# '\v^no[vV]=$'
-"     "         let l:dot_handle = s:GetHandle('dot')
-"     "         if  !empty(l:dot_handle) && !has_key(l:dot_handle, 'abort') && has_key(l:dot_handle, 'input_cache')
-"     "             let l:char = l:dot_handle['input_cache'][0]
-"     "         else
-"     "             let l:char = "\<esc>"
-"     "         endif
-"     "     endif
-"     "     let a:handle['hijack_stream'] .= l:char
-"     " else
-"     "     let a:handle['hijack_stream'] .= l:char
-"     " endif
-"     " return l:char
-" endfunction
-
 function s:HijackProbe(expr) abort
     let l:state = s:GetState()
 
     " HijackProbMap may be consumed instead of expanded, set default case
     let s:hijack = {'mode': 'consumed', 'cmd': '', 'cmd_type': '' }
+    let l:belloff = &belloff
+    set belloff+=error,esc
     try
         " feedkeys(..., 'x') is not working as expected, only last map in
         " stack is processed, execution order is seemingly broken (logging at
         " callback entry doesn't show beginning/intermediate maps)
         silent call feedkeys(a:expr .. s:hijack_probe .. s:hijack_esc, 'x!')
     catch
+    finally
+        let &belloff = l:belloff
     endtry
 
     call s:RestoreState(l:state)
@@ -714,28 +641,6 @@ function s:GetCharFromTypeahead(handle) abort
     return l:char
 endfunction
 
-" function s:ExecuteMap(handle, expr) abort
-"     call s:PushStack('ExecuteMap')
-"     let [ l:timeout, l:timeoutlen ] = [ &timeout, &timeoutlen ]
-"     set timeout timeoutlen=0
-"     " try
-"     call s:Log(s:Pad('ExecuteMap: ', 16) . 'expr='.a:expr)
-"     call feedkeys(a:expr, 'x')
-"     " catch /^op#abort$/
-"     "     let a:handle['abort'] = get(a:handle, 'abort', 'graceful')
-"     " catch
-"     "     call s:Log(s:Pad('ExecuteMap ERROR: ', 16) . 'expr='.a:expr)
-"     "
-"     "     let a:handle['abort'] = 'error'
-"     "     call s:LogError(a:expr)
-"     " endtry
-"     let [ &timeout, &timeoutlen ] = [ l:timeout, l:timeoutlen ]
-"     call s:PopStack()
-"     if has_key(a:handle, 'abort')
-"         throw 'op#abort'
-"     endif
-" endfunction
-
 function s:ReadTypeahead() abort
     let l:typeahead = s:StealTypeahead()
     call feedkeys(l:typeahead, 'i')
@@ -955,3 +860,120 @@ endfunction
 
 let &cpo = s:cpo
 unlet s:cpo
+
+
+" old HijackInput implementation for reference
+
+" while s:hijack['mode'] =~# '\v^(no[vV]=|i|c)$'
+"     if s:hijack['mode'] =~# '\v^no'
+"         while s:hijack['mode'] =~# '\v^no'
+"             call s:AddToInputStream(a:handle, s:hijack['mode'], s:GetChar(a:handle))
+"             let a:handle['expr_reduced'] = l:expr.a:handle['hijack_stream']
+"             if s:workaround_f
+"                 " Problem: feedkeys('dfa'.s:hijack_probe) ends in operator pending mode
+"                 " Workaround: break out of loop early if any of [fFtT] is used
+"                 let s:hijack['mode'] = 'n'
+"                 let s:workaround_f = 0
+"                 break
+"             endif
+"             call s:RestoreState(l:state)
+"             call s:HijackProbe(a:handle)
+"         endwhile
+"     elseif s:hijack['mode'] ==# 'i'
+"         let l:char = s:AddToInputStream(a:handle, s:hijack['mode'], s:GetChar(a:handle))
+"         execute "normal! a".l:char
+"         while l:char != "\<esc>"
+"             let l:char = s:AddToInputStream(a:handle, s:hijack['mode'], s:GetChar(a:handle))
+"             execute "normal! a".l:char
+"         endwhile
+"         let a:handle['expr_reduced'] = l:expr.a:handle['hijack_stream']
+"         call s:HijackProbe(a:handle)
+"     elseif s:hijack['mode'] ==# 'c' || s:hijack['cmd'] =~# '\v^[:/?]$'
+"         if !s:hijack['mode'] ==# 'c' || !s:hijack['cmd'] =~# '\v^[:/?]$'
+"             call s:Log(s:Pad('HijackInput: ', 16) . 'WARNING: Mismatch in command mode hijack state')
+"         endif
+"         call s:RestoreState(l:state)
+"         " call extend(a:handle, { 'hijack_cmd': s:hijack_cmd, 'hijack_cmd_type': s:hijack_cmd_type })
+"         let l:char = s:AddToInputStream(a:handle, s:hijack['mode'], s:GetChar(a:handle))
+"         while l:char != "\<cr>"
+"             let l:char = s:AddToInputStream(a:handle, s:hijack['mode'], s:GetChar(a:handle))
+"         endwhile
+"         call setpos('.', a:handle['cur_start'])
+"         let a:handle['expr_reduced'] = l:expr.a:handle['hijack_stream']
+"         call s:HijackProbe(a:handle)
+"     endif
+"     let s:workaround_f = 0
+"
+"     if !empty(a:handle['hijack_stream'])
+"         let l:root = s:StackBottom()
+"         call extend(l:root, {'input_cache': []}, 'keep')
+"         call add(l:root['input_cache'], a:handle['hijack_stream'])
+"     endif
+" endwhile
+"
+" call s:RestoreState(l:state)
+" call s:Log(s:Pad('INPUT: ', 16) . a:handle['hijack_stream'])
+
+
+
+" function s:AddToInputStream(handle, input_mode, nr) abort
+"     let l:char = nr2char(a:nr)
+"     let s:input_stream .= l:char
+"     return l:char
+"
+"     " let l:char = nr2char(a:nr)
+"     " if a:nr == "\<bs>"
+"     "     let a:handle['hijack_stream'] = strcharpart(a:handle['hijack_stream'], 0, strchars(a:handle['hijack_stream'])-1)
+"     "     let l:char = "\<bs>"
+"     " elseif l:char == "\<c-v>"
+"     "     let l:literal = nr2char(s:GetChar(a:handle))
+"     "     let l:char = (a:input_mode ==# 'i')? l:char.l:literal : l:literal
+"     "     let a:handle['hijack_stream'] .= l:char
+"     " elseif l:char == "\<esc>"
+"     "     if a:input_mode !=# 'i'
+"     "         let a:handle['abort'] = '<esc>'
+"     "         throw 'op#abort'
+"     "     else
+"     "         let a:handle['hijack_stream'] .= l:char
+"     "     endif
+"     " elseif l:char == "\<c-c>"
+"     "     let a:handle['abort'] = 'interrupt (<c-c>)'
+"     "     throw 'op#abort'
+"     " elseif l:char == '.'
+"     "     if a:input_mode =~# '\v^no[vV]=$'
+"     "         let l:dot_handle = s:GetHandle('dot')
+"     "         if  !empty(l:dot_handle) && !has_key(l:dot_handle, 'abort') && has_key(l:dot_handle, 'input_cache')
+"     "             let l:char = l:dot_handle['input_cache'][0]
+"     "         else
+"     "             let l:char = "\<esc>"
+"     "         endif
+"     "     endif
+"     "     let a:handle['hijack_stream'] .= l:char
+"     " else
+"     "     let a:handle['hijack_stream'] .= l:char
+"     " endif
+"     " return l:char
+" endfunction
+
+" function s:ExecuteMap(handle, expr) abort
+"     call s:PushStack('ExecuteMap')
+"     let [ l:timeout, l:timeoutlen ] = [ &timeout, &timeoutlen ]
+"     set timeout timeoutlen=0
+"     " try
+"     call s:Log(s:Pad('ExecuteMap: ', 16) . 'expr='.a:expr)
+"     call feedkeys(a:expr, 'x')
+"     " catch /^op#abort$/
+"     "     let a:handle['abort'] = get(a:handle, 'abort', 'graceful')
+"     " catch
+"     "     call s:Log(s:Pad('ExecuteMap ERROR: ', 16) . 'expr='.a:expr)
+"     "
+"     "     let a:handle['abort'] = 'error'
+"     "     call s:LogError(a:expr)
+"     " endtry
+"     let [ &timeout, &timeoutlen ] = [ l:timeout, l:timeoutlen ]
+"     call s:PopStack()
+"     if has_key(a:handle, 'abort')
+"         throw 'op#abort'
+"     endif
+" endfunction
+
