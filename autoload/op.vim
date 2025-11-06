@@ -282,6 +282,7 @@ function s:ComputeMapRecursive(handle) abort
 endfunction
 
 function s:HijackInput(handle) abort
+    call s:Log(s:Pad('HijackInput: ', 30) .. string(getpos('.')))
     let l:expr = a:handle['expr_reduced']
 
     let l:debug_log = s:hijack['mode'] =~# s:operator_mode_pattern
@@ -309,10 +310,13 @@ function s:HijackInput(handle) abort
 
         if a:handle['input_source'] ==# 'user'
             while s:hijack['mode'] =~# s:operator_mode_pattern
+                call s:Log(s:Pad('GetCharFromUser: ', 30) .. string(getpos('.')))
                 let l:char = s:GetCharFromUser(a:handle)
                 let s:input_stream = s:ProcessStream(s:input_stream, l:char)
                 call s:ProbeExpr(l:expr .. s:input_stream)
             endwhile
+            unsilent echo
+            redraw
         else
             while s:hijack['mode'] =~# s:operator_mode_pattern
                 let s:input_stream ..= s:GetCharFromTypeahead(a:handle)
@@ -356,6 +360,7 @@ function s:ProcessStream(stream, char) abort
 endfunction
 
 function s:ProbeExpr(expr) abort
+    call s:Log(s:Pad('s:ProbeExpr START: ', 30) .. string(getpos('.')))
     let l:state = s:GetState()
 
     " HijackProbMap may be consumed instead of expanded, set default case
@@ -375,6 +380,7 @@ function s:ProbeExpr(expr) abort
     finally
         let &belloff = l:belloff
         call s:RestoreState(l:state)
+        call s:Log(s:Pad('s:ProbeExpr END: ', 30) .. string(getpos('.')))
     endtry
 endfunction
 
@@ -541,18 +547,16 @@ function s:GetCharFromUser(handle) abort
     endif
 
     " call s:Log(s:Pad('GetCharFromUser: ', 30) .. 'GOT' .. ' char=' .. l:char)
-    if !getchar(1)
-        unsilent echo
-        redraw
-    endif
     return l:char
 endfunction
 
 function s:GetCharFromUser_i(handle) abort
     let l:match_ids = []
+    let l:state = s:GetState()
     try
         if !getchar(1)
             " show changes
+            call s:Log(s:Pad('GETCHAR: ', 30) .. string(getpos('.')) .. ' FEED: ' .. a:handle['expr_reduced'] .. s:input_stream)
             call feedkeys(a:handle['expr_reduced'] .. s:input_stream, 'x')
 
             " set highlights
@@ -563,6 +567,7 @@ function s:GetCharFromUser_i(handle) abort
         let l:char = s:GetCharStr('i')
     finally
         call s:ClearHighlights(l:match_ids)
+        call s:RestoreState(l:state)
     endtry
 
     return l:char
@@ -635,15 +640,6 @@ function s:GetCharStr(mode) abort
         endif
     endtry
     return l:char
-endfunction
-
-function s:SetPrompts() abort
-    if s:hijack['mode'] =~# '\v^(no|consumed)$'
-        unsilent echo 'Operator Input:' .. s:input_stream
-    elseif s:hijack['mode'] ==# 'c' || s:hijack['cmd_type'] =~# '\v^[:/?]$'
-        unsilent echo s:hijack['cmd_type'] .. s:hijack['cmd']
-    endif
-    redraw
 endfunction
 
 function s:ClearHighlights(match_ids) abort
@@ -794,7 +790,6 @@ function s:GetStackPrev(handle) abort
 endfunction
 
 function s:GetStack() abort
-    " return s:debug_stack
     return s:stack
 endfunction
 
