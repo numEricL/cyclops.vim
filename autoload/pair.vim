@@ -1,8 +1,6 @@
 let s:cpo = &cpo
 set cpo&vim
 
-call op#Load()
-
 nmap <silent> <plug>(pair#next) :<c-u>call <sid>PairRepeat(';', v:count, v:register, 'normal')<cr>
 vmap <silent> <plug>(pair#visual_next) :<c-u>call <sid>PairRepeat(';', v:count, v:register, 'visual')<cr>
 " omap <silent><expr> <plug>(pair#op_pending_next) <sid>PairOpPending(';')
