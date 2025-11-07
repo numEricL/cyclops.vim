@@ -94,8 +94,8 @@ function s:ComputeMapOnStack(handle) abort
             " stack recursion starts here
             call s:ComputeMapRecursive(a:handle)
             let l:input = s:HijackInput(a:handle)
-            call s:CheckForErrors(a:handle['expr_reduced'] .. s:input_stream)
-            let a:handle['expr_reduced'] ..= s:input_stream
+            call s:CheckForErrors(a:handle['expr_reduced'] .. l:input)
+            let a:handle['expr_reduced'] ..= l:input
         catch /op#abort/
             echohl ErrorMsg | echomsg _op_#stack#GetException() | echohl None
             call interrupt()
@@ -107,8 +107,8 @@ function s:ComputeMapOnStack(handle) abort
         " stack recursion continues here
         call s:ComputeMapRecursive(a:handle)
         let l:input = s:HijackInput(a:handle)
-        call s:CheckForErrors(a:handle['expr_reduced'] .. s:input_stream)
-        let a:handle['expr_reduced'] ..= s:input_stream
+        call s:CheckForErrors(a:handle['expr_reduced'] .. l:input)
+        let a:handle['expr_reduced'] ..= l:input
         call s:ParentReduceExprInput(a:handle)
 
         call feedkeys(a:handle['expr_reduced'], 'tx')
@@ -221,9 +221,12 @@ endfunction
 
 " map the first char of s:hijack_probe to get hijack data
 " Some commands may consume the RHS and start executing, use something unusual
-execute ' noremap <expr>' .. s:hijack_probe .. ' <sid>HijackProbeMap()'
-execute 'lnoremap <expr>' .. s:hijack_probe .. ' <sid>HijackProbeMap()'
-execute 'tnoremap <expr>' .. s:hijack_probe .. ' <sid>HijackProbeMap()'
+" lnoremap doesn't actually map i c modes, so we still use noremap!
+execute ' noremap  <expr>' .. s:hijack_probe .. ' <sid>HijackProbeMap()'
+execute ' noremap! <expr>' .. s:hijack_probe .. ' <sid>HijackProbeMap()'
+execute 'lnoremap  <expr>' .. s:hijack_probe .. ' <sid>HijackProbeMap()'
+execute 'tnoremap  <expr>' .. s:hijack_probe .. ' <sid>HijackProbeMap()'
+
 function s:HijackProbeMap() abort
     let s:hijack = {'mode': mode(1), 'cmd': getcmdline(), 'cmd_type': getcmdtype() }
     return ''
