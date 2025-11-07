@@ -1,6 +1,8 @@
 let s:cpo = &cpo
 set cpo&vim
 
+silent! call _op_#init#settings#Load()
+
 nmap <silent> <plug>(pair#next) :<c-u>call <sid>PairRepeat(';', v:count, v:register, 'normal')<cr>
 vmap <silent> <plug>(pair#visual_next) :<c-u>call <sid>PairRepeat(';', v:count, v:register, 'visual')<cr>
 " omap <silent><expr> <plug>(pair#op_pending_next) <sid>PairOpPending(';')
@@ -54,27 +56,12 @@ function pair#SetMaps(mapping_type, pairs, ...) abort range
     endif
 endfunction
 
-function s:AssertSameRHS(modes, map) abort
-    if len(a:modes) < 2
-        return
-    endif
-
-    let l:first_rhs = maparg(a:map, a:modes[0])
-    for l:next_mode in a:modes[1:]
-        if l:first_rhs !=# maparg(a:map, l:next_mode)
-            throw 'cyclops.vim: Mapped keys in different modes must have the same RHS: '.a:map
-        endif
-    endfor
-endfunction
-
 function s:SetMap(mapping_type, pair, opts) abort
     let l:noremap = (a:mapping_type =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)')
     let l:modes = (a:mapping_type =~# '\v^(no|map)')? 'nvo' : a:mapping_type[0]
 
     let l:plugpair = ['', '']
     for l:id in range(2)
-        " echom l:noremap
-        " echom maparg(a:pair[l:id], l:modes[0])
         if l:noremap || empty(maparg(a:pair[l:id], l:modes[0]))
             let l:plugpair[l:id] = s:RegisterNoremap(a:pair[l:id])
         else
@@ -89,9 +76,7 @@ function s:SetMap(mapping_type, pair, opts) abort
             let l:create_plugmap .= (l:mapinfo['nowait'])? '<nowait>' : ''
             let l:create_plugmap .= (l:mapinfo['silent'])? '<silent>' : ''
             let l:create_plugmap .= (l:mapinfo['expr'])? '<expr>' : ''
-            let l:create_plugmap .= l:plugpair[l:id].' '
-            let l:create_plugmap .= l:rhs
-            " echom l:create_plugmap
+            let l:create_plugmap .= l:plugpair[l:id] .. ' ' .. l:rhs
             execute l:create_plugmap
         endif
     endfor
@@ -122,8 +107,8 @@ function s:PairRepeat(direction, count, register, mode) abort
         call s:Callback('', 'pair')
         let l:stored_handle['pair_id'] = l:old_id
     else
-        call s:StackInit()
-        let l:stack_handle = s:StackTop()
+        call _op_#stack#Init()
+        let l:stack_handle = _op_#stack#Top()
         " TODO: deepcopy from pair partner and modify only necessary fields
         call extend(l:stack_handle, {
                     \ 'accepts_count'    : l:stored_handle['accepts_count'],
@@ -159,8 +144,8 @@ endfunction
 "             endif
 "             return l:op_mode.l:handle['pair'][l:id]
 "         else
-"             call s:StackInit()
-"             let l:top_handle = s:StackTop()
+"             call _op_#stack#Init()
+"             let l:top_handle = _op_#stack#Top()
 "             call extend(l:top_handle, { 'op_type': 'pair', 'expr': l:handle['pair'][l:id], 'pair': deepcopy(l:handle['pair']) })
 "             call extend(l:top_handle, { 'accepts_count': l:handle['accepts_count'], 'accepts_register': l:handle['accepts_register'] })
 "             call extend(l:top_handle, { 'shift_marks': l:handle['shift_marks'], 'visual_motion': l:handle['visual_motion'] })
@@ -211,14 +196,6 @@ endfunction
 
 function s:InitRepeat(handle, count, register, mode) abort
     execute "call ".op#SID()."InitRepeat(a:handle, a:count, a:register, a:mode)"
-endfunction
-
-function s:StackInit() abort
-    execute "call ".op#SID()."StackInit()"
-endfunction
-
-function s:StackTop() abort
-    execute "return ".op#SID()."StackTop()"
 endfunction
 
 function s:SID() abort

@@ -3,17 +3,17 @@ if exists("g:cyclops_loaded")
 endif
 let g:cyclops_loaded = 1
 
-let g:cyclops_max_input_size              = !exists('g:cyclops_max_input_size')              ? 1024    : g:cyclops_max_input_size
-let g:cyclops_no_mappings                 = !exists('g:cyclops_no_mappings')                 ? 0       : g:cyclops_no_mappings
-let g:cyclops_cursor_highlight_fallback   = !exists('g:cyclops_cursor_highlight_fallback')   ? 'Error' : g:cyclops_cursor_highlight_fallback
-let g:cyclops_map_defaults = {
-            \ 'accepts_count': 1,
-            \ 'accepts_register': 1,
-            \ 'shift_marks': 0,
-            \ 'visual_motion': 0,
-            \ 'consumes_typeahead': 0,
-            \ 'silent': 1,
-            \ }
+let s:cpo = &cpo
+set cpo&vim
+
+silent! call _op_#init#settings#Load()
+
+command PL call op#PrintDebugLog()
+command PV call op#PrintScriptVars()
+
+nmap <silent> <plug>(dot#dot) <cmd>call _op_#dot#Repeat(v:count, v:register, 'normal')<cr>
+vmap <silent> <plug>(dot#visual_dot) <cmd>call _op_#dot#Repeat(v:count, v:register, 'visual')<cr>
+omap <silent><expr> <plug>(dot#op_pending_dot) _op_#dot#RepeatOpPending()
 
 if !g:cyclops_no_mappings
     nmap . <plug>(dot#dot)
@@ -28,3 +28,6 @@ if !g:cyclops_no_mappings
     vmap , <plug>(pair#visual_previous)
     omap , <plug>(pair#op_pending_previous)
 endif
+
+let &cpo = s:cpo
+unlet s:cpo
