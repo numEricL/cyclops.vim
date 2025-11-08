@@ -15,12 +15,12 @@ endif
 " Internal API
 "
 let s:GetStack = function('_op_#stack#GetStack')
-let s:Init = function('_op_#stack#Init')
-let s:Depth = function('_op_#stack#Depth')
-let s:Push = function('_op_#stack#Push')
-let s:Pop = function('_op_#stack#Pop')
-let s:Top = function('_op_#stack#Top')
-let s:GetPrev = function('_op_#stack#GetPrev')
+let s:Init     = function('_op_#stack#Init')
+let s:Depth    = function('_op_#stack#Depth')
+let s:Push     = function('_op_#stack#Push')
+let s:Pop      = function('_op_#stack#Pop')
+let s:Top      = function('_op_#stack#Top')
+let s:GetPrev  = function('_op_#stack#GetPrev')
 
 "
 " Stack management functions

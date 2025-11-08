@@ -10,9 +10,11 @@ silent! call _op_#init#settings#Load()
 " must be single character
 let s:hijack_probe = '×'
 let s:hijack_esc = repeat("\<esc>", 10)
-let s:operator_mode_pattern = '\v^(no[vV]=|consumed|i|c)$'
 
-let s:hijack = {'mode': '', 'cmd': '', 'cmd_type': '' }
+" n-l no-l catches f, F, t, T in lang mode (e.g. fa and dfa)
+let s:operator_mode_pattern = '\v^(no[vV]=|consumed|i|c|n-l|no-l|c-l|i-l)$'
+
+let s:hijack = {'mode': '', 'cmd': '', 'cmd_type': '', 'lmap': ''}
 let s:input_stream = ''
 let s:ambiguous_map_chars = ''
 let s:inputs = []
@@ -31,8 +33,8 @@ function _op_#op#GetHandle(op_type) abort
 endfunction
 
 function s:InitScriptVars()
-    let s:hijack = {'mode': '', 'cmd': '', 'cmd_type': '' }
     let s:input_stream = ''
+    let s:hijack = {'mode': '', 'cmd': '', 'cmd_type': '', 'lmap': ''} " init early for s:Log
     let s:ambiguous_map_chars = ''
     if !empty(s:inputs)
         call remove(s:inputs, 0, -1)
@@ -66,7 +68,7 @@ endfunction
 
 function _op_#op#ComputeMapCallback() abort range
     let l:handle = _op_#stack#Top()
-    call s:Log(s:Pad('Callback ' .. _op_#stack#Depth() .. ' ' .. s:PModes() .. ': ', 30) .. 'expr=' .. l:handle['expr_orig'] .. ' typeahead=' .. substitute(s:ReadTypeahead(), '\m' .. "\<esc>" .. '\+$', "\<esc>", ''))
+    call s:Log(s:Pad('ComputeMapCallback ' .. _op_#stack#Depth() .. ' ' .. s:PModes(0) .. ': ', 30) .. 'expr=' .. l:handle['expr_orig'] .. ' typeahead=' .. substitute(s:ReadTypeahead(), '\m' .. "\<esc>" .. '\+$', "\<esc>", ''))
 
     " reduces nested op# exprs and concatenates with their inputs
     call s:ComputeMapOnStack(l:handle)
@@ -74,6 +76,7 @@ function _op_#op#ComputeMapCallback() abort range
     " execute computed map and store handle in case of repeat
     if _op_#stack#Depth() == 1
         " expr_with_modifiers stored for debugging
+        call s:Log(s:Pad('ComputeMapCallback: ', 30) .. 'final expr=' .. l:handle['expr_reduced'])
         let l:handle['expr_with_modifiers'] = _op_#utils#ExprWithModifiers(l:handle)
         call feedkeys(l:handle['expr_with_modifiers'] .. s:ambiguous_map_chars, 'tx!')
         if l:handle['opts']['silent']
@@ -91,8 +94,12 @@ function s:ComputeMapOnStack(handle) abort
         endif
 
         try
-            " stack recursion starts here
-            call s:ComputeMapRecursive(a:handle)
+            " recursion typically happens at this ProbeExpr call, but can also
+            " happen in HijackInput if an operator pending map is triggered
+
+            " call _op_#stack#Push(s:Pad('Push  ' .. s:PModes(0) .. ': ', 25) .. 'expr=' .. a:handle['expr_orig'] .. s:hijack_probe .. '<esc>' .. ' typeahead=' .. s:ReadTypeahead())
+            call s:ProbeExpr(a:handle['expr_orig'])
+            " call _op_#stack#Pop(s:Pad('Pop   ' .. s:PModes(1) .. ': ', 25) .. 'cmd=' .. s:hijack['cmd'] .. ' cmd_type=' .. s:hijack['cmd_type'] .. ' typeahead=' .. s:ReadTypeahead())
             let l:input = s:HijackInput(a:handle)
             call s:CheckForErrors(a:handle['expr_reduced'] .. l:input)
             let a:handle['expr_reduced'] ..= l:input
@@ -104,8 +111,7 @@ function s:ComputeMapOnStack(handle) abort
         call s:ParentReduceExpr(a:handle)
         call inputsave()
 
-        " stack recursion continues here
-        call s:ComputeMapRecursive(a:handle)
+        call s:ProbeExpr(a:handle['expr_orig'])
         let l:input = s:HijackInput(a:handle)
         call s:CheckForErrors(a:handle['expr_reduced'] .. l:input)
         let a:handle['expr_reduced'] ..= l:input
@@ -117,13 +123,13 @@ function s:ComputeMapOnStack(handle) abort
 endfunction
 
 function s:ComputeMapRecursive(handle) abort
-    call _op_#stack#Push(s:Pad('Push  ' .. s:PModes() .. ': ', 25) .. 'expr=' .. a:handle['expr_orig'] .. s:hijack_probe .. '<esc>' .. ' typeahead=' .. s:ReadTypeahead())
     call s:ProbeExpr(a:handle['expr_orig'])
-    call _op_#stack#Pop(s:Pad('Pop   ' .. s:PModes() .. ': ', 25) .. 'mode=' .. s:hijack['mode'] .. ' cmd=' .. s:hijack['cmd'] .. ' cmd_type=' .. s:hijack['cmd_type'] .. ' typeahead=' .. s:ReadTypeahead())
 endfunction
 
 function s:HijackInput(handle) abort
+    call s:Log(s:Pad('HijackInput ' .. s:PModes(1) .. ': ', 30))
     if s:hijack['mode'] !~# s:operator_mode_pattern
+        call s:Log(s:Pad('HijackInput EXIT: ', 30) .. 'non-operator mode detected: mode=' .. s:hijack['mode'])
         return ''
     endif
 
@@ -132,7 +138,6 @@ function s:HijackInput(handle) abort
         return s:input_stream
     endif
 
-    call s:Log(s:Pad('HijackInput ' .. s:PModes() .. ': ', 30))
     call s:Log(s:Pad('HijackInput GET INPUT: ', 30) .. 'expr=' .. a:handle['expr_reduced'] .. ' typeahead=' .. substitute(s:ReadTypeahead(), '\m' .. "\<esc>" .. '\+$', "\<esc>", ''))
 
     " Get input from ambig maps, user, or typeahead
@@ -149,7 +154,13 @@ function s:HijackInput(handle) abort
         if a:handle['input_source'] ==# 'user'
             while s:hijack['mode'] =~# s:operator_mode_pattern
                 let l:char = s:GetCharFromUser(a:handle)
+                call s:Log(s:Pad('HijackInput ' .. s:PModes(1) .. ' GOT CHAR: ', 30) .. 'char=' .. string(l:char))
                 let s:input_stream = s:ProcessStream(s:input_stream, l:char)
+                if s:hijack['mode'] ==# 'no-l'
+                    " Problem: feedkeys('dfa×') ends in (lang) operator pending mode
+                    " Workaround: break out of loop early if detected
+                    break
+                endif
                 call s:ProbeExpr(l:expr .. s:input_stream)
             endwhile
             unsilent echo
@@ -196,10 +207,17 @@ function s:ProcessStream(stream, char) abort
 endfunction
 
 function s:ProbeExpr(expr) abort
+    call _op_#stack#Push(s:Pad('Push  ' .. s:PModes(0) .. ': ', 25) .. 'expr=' .. a:expr .. s:hijack_probe .. '<esc>' .. ' typeahead=' .. s:ReadTypeahead())
     let l:state = s:GetState()
 
     " HijackProbMap may be consumed instead of expanded, set default case
-    let s:hijack = {'mode': 'consumed', 'cmd': '', 'cmd_type': '' }
+    let s:hijack = {'mode': 'consumed', 'cmd': '', 'cmd_type': '', 'lmap': '' }
+    " let [ l:timeout, l:timeoutlen ] = [ &timeout, &timeoutlen ]
+    " let [ l:ttimeout, l:ttimeoutlen ] = [ &ttimeout, &ttimeoutlen ]
+    " set timeout timeoutlen=0
+    " set ttimeout ttimeoutlen=0
+    let l:iminsert = &iminsert
+    set iminsert=1
     let l:belloff = &belloff
     set belloff+=error,esc
     try
@@ -214,9 +232,13 @@ function s:ProbeExpr(expr) abort
         throw 'op#abort'
     catch
     finally
+        let &iminsert = l:iminsert
         let &belloff = l:belloff
+        " let [ &timeout, &timeoutlen ] = [ l:timeout, l:timeoutlen ]
+        " let [ &ttimeout, &ttimeoutlen ] = [ l:ttimeout, l:ttimeoutlen ]
         call s:RestoreState(l:state)
     endtry
+    call _op_#stack#Pop(s:Pad('Pop   ' .. s:PModes(1) .. ': ', 25) .. 'cmd=' .. s:hijack['cmd'] .. ' cmd_type=' .. s:hijack['cmd_type'] .. ' typeahead=' .. s:ReadTypeahead())
 endfunction
 
 " map the first char of s:hijack_probe to get hijack data
@@ -224,11 +246,16 @@ endfunction
 " lnoremap doesn't actually map i c modes, so we still use noremap!
 execute ' noremap  <expr>' .. s:hijack_probe .. ' <sid>HijackProbeMap()'
 execute ' noremap! <expr>' .. s:hijack_probe .. ' <sid>HijackProbeMap()'
-execute 'lnoremap  <expr>' .. s:hijack_probe .. ' <sid>HijackProbeMap()'
+execute 'lnoremap  <expr>' .. s:hijack_probe .. ' <sid>HijackProbeLangMap()'
 execute 'tnoremap  <expr>' .. s:hijack_probe .. ' <sid>HijackProbeMap()'
 
 function s:HijackProbeMap() abort
-    let s:hijack = {'mode': mode(1), 'cmd': getcmdline(), 'cmd_type': getcmdtype() }
+    let s:hijack = {'mode': mode(1), 'cmd': getcmdline(), 'cmd_type': getcmdtype(), 'lmap': v:false }
+    return ''
+endfunction
+
+function s:HijackProbeLangMap() abort
+    let s:hijack = {'mode': mode(1) .. '-l', 'cmd': getcmdline(), 'cmd_type': getcmdtype(), 'lmap': v:true }
     return ''
 endfunction
 
@@ -282,7 +309,8 @@ function s:ParentReduceExpr(handle) abort
     endwhile
 
     " store reduced call
-    call s:Log(s:Pad('ParentReduceExpr: ', 30) .. 'parent_call=' .. l:parent_call .. '    parent_expr_reduced_so_far+=' .. strcharpart(l:calling_expr, 0, l:count))
+    call s:Log(s:Pad('ParentReduceExpr: ', 30) .. 'calling_expr=' .. l:calling_expr)
+    call s:Log(s:Pad('ParentReduceExpr: ', 30) .. 'parent_call =' .. l:parent_call .. '    parent_expr_reduced_so_far+=' .. strcharpart(l:calling_expr, 0, l:count))
     let a:handle['parent_call'] = l:parent_call
     let l:parent_handle['expr_reduced_so_far'] ..= strcharpart(l:calling_expr, 0, l:count)
 endfunction
@@ -292,16 +320,16 @@ function s:ParentReduceExprInput(handle) abort
     " let l:op = get(a:handle, 'op_mode', '')
     let l:op = ''
 
-    let l:expr = l:op . a:handle['expr_reduced']
+    let l:expr = l:op .. a:handle['expr_reduced']
     let l:parent_handle = _op_#stack#GetPrev(a:handle)
-    let l:update_pattern = '\V'.escape(l:parent_handle['expr_reduced_so_far'], '\').'\zs'.escape(a:handle['parent_call'], '\')
+    let l:update_pattern = '\V' .. escape(l:parent_handle['expr_reduced_so_far'], '\') .. '\zs' .. escape(a:handle['parent_call'], '\')
     let l:update = substitute(l:parent_handle['expr_reduced'], l:update_pattern, escape(l:expr, '\'), '')
     if l:update ==# l:parent_handle['expr_reduced']
-        call s:Throw('cyclops.vim: "Unexpected error while updating parent call"')
+        call s:Throw('cyclops.vim: "unexpected error while updating parent call"')
     endif
-    call s:Log(s:Pad('ParentReduceExprInput:', 30) . 'parent expr='.l:update . '    parent expr_reduced_so_far+='.l:expr)
+    call s:Log(s:Pad('ParentReduceExprInput:', 30) .. l:parent_handle['expr_reduced'] .. ' -> ' .. l:update)
     let l:parent_handle['expr_reduced'] = l:update
-    let l:parent_handle['expr_reduced_so_far'] .= l:expr
+    let l:parent_handle['expr_reduced_so_far'] ..= l:expr
 endfunction
 
 function s:GetState() abort
@@ -343,14 +371,14 @@ endfunction
 
 function s:GetCharFromUser(handle) abort
     " extra typeahead may be available if user typed fast
-    if s:hijack['mode'] ==# 'i'
+    if s:hijack['mode'] =~# '\v^(i|i-l)$'
         let l:char = s:GetCharFromUser_i(a:handle)
-    elseif s:hijack['mode'] =~# '\v^(no[vV]=|consumed)$'
+    elseif s:hijack['mode'] =~# '\v^(no[vV]=|consumed|n-l|no-l)$'
         let l:char = s:GetCharFromUser_no(a:handle)
-    elseif s:hijack['mode'] ==# 'c'
+    elseif s:hijack['mode'] =~# '\v^(c|c-l)$'
         let l:char = s:GetCharFromUser_c(a:handle)
     else
-        call s:Throw('cyclops.vim: Unsupported hijack mode '.string(s:hijack['mode']))
+        call s:Throw('cyclops.vim: unsupported hijack mode '.string(s:hijack['mode']))
     endif
 
     if empty(l:char)
@@ -412,6 +440,7 @@ endfunction
 
 function s:GetCharFromUser_c(handle) abort
     let l:match_ids = []
+    call s:Log(s:Pad('GetCharFromUser_c ' .. s:PModes(1) .. ': ', 30) .. 'cmd_type=' .. s:hijack['cmd_type'] .. ' cmd=' .. s:hijack['cmd'] .. ' input_stream=' .. s:input_stream)
 
     if !getchar(1)
         unsilent echo s:hijack['cmd_type'] .. s:hijack['cmd']
@@ -555,15 +584,16 @@ function s:Throw(msg)
     endtry
 endfunction
 
-function s:PModes() abort
-    if empty(s:hijack['mode'])
-        let l:hmode = '-'
-    elseif s:hijack['mode'] ==# 'consumed'
-        let l:hmode = 'cns'
+function s:PModes(kind) abort
+    if a:kind == 0
+        return '(' .. mode(1) .. ')'
     else
-        let l:hmode = s:hijack['mode']
+        if empty(s:hijack['mode'])
+            let l:hmode = '-'
+        endif
+        let l:hmode = substitute(s:hijack['mode'], 'consumed', 'cns', '')
+        return '(' .. mode(1) .. '|' . l:hmode . ')'
     endif
-    return '(' . mode(1) . '|' . l:hmode . ')'
 endfunction
 
 " function s:SetDefaultRegister() abort
@@ -593,6 +623,25 @@ function s:Workaround_f(char)
     let s:workaround_f = 1
     return a:char
 endfunction
+
+" noremap <plug>(op#_noremap_f) f
+" noremap <plug>(op#_noremap_F) F
+" noremap <plug>(op#_noremap_t) t
+" noremap <plug>(op#_noremap_T) T
+"    omap <plug>(op#_noremap_f) <plug>(op#_workaround_f)
+"    omap <plug>(op#_noremap_F) <plug>(op#_workaround_F)
+"    omap <plug>(op#_noremap_t) <plug>(op#_workaround_t)
+"    omap <plug>(op#_noremap_T) <plug>(op#_workaround_T)
+" onoremap <expr> <plug>(op#_workaround_f) <sid>Workaround_f('f')
+" onoremap <expr> <plug>(op#_workaround_F) <sid>Workaround_f('F')
+" onoremap <expr> <plug>(op#_workaround_t) <sid>Workaround_f('t')
+" onoremap <expr> <plug>(op#_workaround_T) <sid>Workaround_f('T')
+"
+" let s:workaround_f = 0
+" function s:Workaround_f(char)
+"     let s:workaround_f = 1
+"     return a:char
+" endfunction
 
 let &cpo = s:cpo
 unlet s:cpo
