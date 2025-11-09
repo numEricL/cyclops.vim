@@ -41,7 +41,7 @@ function _op_#stack#Init(init_func) abort
         if s:stack_debug && !empty(s:debug_stack)
             call remove(s:debug_stack, 0, -1)
         endif
-        call _op_#log#ClearDebugLog()
+        call _op_#log#InitDebugLog()
         call s:Push('operator', 'StackInit')
     endif
 endfunction
@@ -51,7 +51,7 @@ function _op_#stack#Depth() abort
 endfunction
 
 function _op_#stack#Push(type, ...) abort
-    if a:type !~# '\v(operator|operand)'
+    if a:type !~# '\v^(operator|operand)$'
         call _op_#op#Throw('cyclops.vim: Invalid stack frame type: '.string(a:type))
     endif
     let l:tag = a:0? a:1 : ''
@@ -65,14 +65,14 @@ function _op_#stack#Push(type, ...) abort
     if s:stack_debug
         call add(s:debug_stack, l:frame)
     endif
-    call _op_#log#Log(_op_#log#Pad('↓↓↓↓ Push ' .. s:stack_id .. ' ' .. a:type .. ': ', 30) .. l:tag)
+    call _op_#log#Log(_op_#log#Pad('↓↓↓↓ Push ' .. s:stack_id .. ' ' .. _op_#log#PModes(0) .. ' ' .. a:type .. ': ', 30) .. l:tag)
     return s:stack_id
 endfunction
 
 function _op_#stack#Pop(...) abort
     let l:stack_id = (a:0 >= 1)? a:1 : '-'
     let l:tag      = (a:0 >= 2)? a:2 : ''
-    call _op_#log#Log(_op_#log#Pad('↑↑↑↑ Pop  ' .. l:stack_id .. ': ', 30) .. l:tag)
+    call _op_#log#Log(_op_#log#Pad('↑↑↑↑ Pop  ' .. l:stack_id .. ' ' .. _op_#log#PModes(1) .. ': ', 30) .. l:tag)
     call remove(s:stack, -1)
 endfunction
 

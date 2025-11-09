@@ -14,15 +14,16 @@ let s:hijack_esc = repeat("\<esc>", 3)
 " n-l no-l catches f, F, t, T in lang mode (e.g. fa and dfa)
 let s:operator_mode_pattern = '\v^(no[vV]=|consumed|i|c|n-l|no-l|c-l|i-l)$'
 
-let s:hijack = {'mode': '', 'cmd': '', 'cmd_type': '', 'lmap': ''}
+let s:hijack = {'hmode': '', 'cmd': '', 'cmd_type': '', 'lmap': ''}
 let s:input_stream = ''
 let s:ambiguous_map_chars = ''
 let s:inputs = []
 
 let s:handles = { 'op': {}, 'dot': {}, 'pair': {} }
 
-let s:Pad = function('_op_#log#Pad')
-let s:Log = function('_op_#log#Log')
+let s:Pad    = function('_op_#log#Pad')
+let s:Log    = function('_op_#log#Log')
+let s:PModes = function('_op_#log#PModes')
 
 function _op_#op#GetHandles() abort
     return s:handles
@@ -34,7 +35,7 @@ endfunction
 
 function s:InitScriptVars()
     let s:input_stream = ''
-    let s:hijack = {'mode': '', 'cmd': '', 'cmd_type': '', 'lmap': ''} " init early for s:Log
+    let s:hijack = {'hmode': '', 'cmd': '', 'cmd_type': '', 'lmap': ''} " init early for s:Log
     let s:ambiguous_map_chars = ''
     if !empty(s:inputs)
         call remove(s:inputs, 0, -1)
@@ -135,8 +136,8 @@ endfunction
 
 function s:HijackInput(handle) abort
     call s:Log(s:Pad('HijackInput ' .. s:PModes(2) .. ': ', 30))
-    if s:hijack['mode'] !~# s:operator_mode_pattern
-        call s:Log(s:Pad('HijackInput EXIT: ', 30) .. 'non-operator mode detected: mode=' .. s:hijack['mode'])
+    if s:hijack['hmode'] !~# s:operator_mode_pattern
+        call s:Log(s:Pad('HijackInput EXIT: ', 30) .. 'non-operator mode detected: mode=' .. s:hijack['hmode'])
         return ''
     endif
 
@@ -152,23 +153,23 @@ function s:HijackInput(handle) abort
     let l:op = (a:handle['type'] ==# 'operand')? a:handle['parent_call'] : ''
     let l:expr = l:op .. a:handle['expr_reduced']
 
-    while !empty(s:ambiguous_map_chars) && s:hijack['mode'] =~# s:operator_mode_pattern
+    while !empty(s:ambiguous_map_chars) && s:hijack['hmode'] =~# s:operator_mode_pattern
         let l:ambig_char = strcharpart(s:ambiguous_map_chars, 0, 1)
         let s:ambiguous_map_chars = strcharpart(s:ambiguous_map_chars, 1)
         let s:input_stream ..= l:ambig_char
         call s:ProbeExpr(l:expr .. s:input_stream, 'operand')
     endwhile
 
-    if s:hijack['mode'] =~# s:operator_mode_pattern
+    if s:hijack['hmode'] =~# s:operator_mode_pattern
         if a:handle['input_source'] ==# 'user'
-            while s:hijack['mode'] =~# s:operator_mode_pattern
+            while s:hijack['hmode'] =~# s:operator_mode_pattern
                 let l:char = s:GetCharFromUser(a:handle)
-                call s:Log(s:Pad('HijackInput ' .. s:PModes(2) .. ' GOT CHAR: ', 30) .. 'char=' .. string(l:char))
+                call s:Log(s:Pad('HijackInput ' .. s:PModes(2) .. ' GOT CHAR: ', 30) .. 'char=' .. l:char)
                 let s:input_stream = s:ProcessStream(s:input_stream, l:char)
-                if s:hijack['mode'] ==# 'no-l'
+                if s:hijack['hmode'] ==# 'no-l'
                     " Problem: feedkeys('dfa×') ends in (lang) operator pending mode
                     " Workaround: break out of loop early if detected
-                    " let s:hijack['mode'] = 'n'
+                    " let s:hijack['hmode'] = 'n'
                     break
                 endif
                 call s:ProbeExpr(l:expr .. s:input_stream, 'operand')
@@ -176,7 +177,7 @@ function s:HijackInput(handle) abort
             unsilent echo
             redraw
         else
-            while s:hijack['mode'] =~# s:operator_mode_pattern
+            while s:hijack['hmode'] =~# s:operator_mode_pattern
                 let s:input_stream ..= s:GetCharFromTypeahead(a:handle)
                 call s:ProbeExpr(l:expr .. s:input_stream, 'operand')
             endwhile
@@ -198,18 +199,20 @@ function s:HijackInput(handle) abort
 endfunction
 
 function s:CheckForErrors(expr) abort
-    call s:Log(s:Pad('CheckForErrors: ', 30) .. 'expr=' .. a:expr .. ' typeahead=' .. s:TypeaheadLog())
-    call s:Log(s:Pad('CheckForErrors ' .. s:PModes(2) .. ': ', 30))
-    let l:state = s:GetState()
+    if !g:cyclops_check_for_errors_enabled
+        return
+    endif
+    call s:Log(s:Pad('CheckForErrors ' .. s:PModes(0) .. ': ', 30) .. 'expr=' .. a:expr .. ' typeahead=' .. s:TypeaheadLog())
+    let l:state = _op_#utils#GetState()
     try
         silent call feedkeys(a:expr, 'tx!')
         if getchar(1)
             call _op_#op#Throw('cyclops.vim: Incomplete command while processing operator')
         endif
     catch
-        call _op_#op#Throw('')
+        call _op_#op#Throw()
     finally
-        call s:RestoreState(l:state)
+        call _op_#utils#RestoreState(l:state)
     endtry
 endfunction
 
@@ -227,18 +230,16 @@ function s:ProbeExpr(expr, type) abort
     let l:msg = 'expr=' .. a:expr .. s:hijack_probe .. '<esc>' .. ' typeahead=' .. s:TypeaheadLog()
     let l:stack_id = _op_#stack#Push(a:type, l:msg)
 
-    let l:state = s:GetState()
+    let l:state = _op_#utils#GetState()
 
     " HijackProbMap may be consumed instead of expanded, set default case
-    let s:hijack = {'mode': 'consumed', 'cmd': '', 'cmd_type': '', 'lmap': '' }
-    " let [ l:timeout, l:timeoutlen ] = [ &timeout, &timeoutlen ]
-    " let [ l:ttimeout, l:ttimeoutlen ] = [ &ttimeout, &ttimeoutlen ]
-    " set timeout timeoutlen=0
-    " set ttimeout ttimeoutlen=0
-    let l:iminsert = &iminsert
-    set iminsert=1
-    let l:belloff = &belloff
-    set belloff+=error,esc
+    let s:hijack = {'hmode': 'consumed', 'cmd': '', 'cmd_type': '', 'lmap': '' }
+
+    " vim uses these timeouts for feedkeys, neovim apparently does not
+    let [ l:timeout, l:timeoutlen ] = [ &timeout, &timeoutlen ] | set timeout timeoutlen=0
+    let [ l:ttimeout, l:ttimeoutlen ] = [ &ttimeout, &ttimeoutlen ] | set ttimeout ttimeoutlen=0
+    let l:iminsert = &iminsert | set iminsert=1
+    let l:belloff = &belloff | set belloff+=error,esc
     try
         " feedkeys(... s:hijack_probe, 'x') is not working as expected, only
         " last map in stack is processed, execution order is seemingly broken
@@ -253,43 +254,33 @@ function s:ProbeExpr(expr, type) abort
         call s:Log(s:Pad('** Exception in ProbeExpr **', 30) .. v:exception)
         call s:Log(s:Pad('** Exception in ProbeExpr **', 30) .. v:throwpoint)
     finally
-        let &iminsert = l:iminsert
         let &belloff = l:belloff
-        " let [ &timeout, &timeoutlen ] = [ l:timeout, l:timeoutlen ]
-        " let [ &ttimeout, &ttimeoutlen ] = [ l:ttimeout, l:ttimeoutlen ]
-        call s:RestoreState(l:state)
+        let &iminsert = l:iminsert
+        let [ &ttimeout, &ttimeoutlen ] = [ l:ttimeout, l:ttimeoutlen ]
+        let [ &timeout, &timeoutlen ] = [ l:timeout, l:timeoutlen ]
+        call _op_#utils#RestoreState(l:state)
     endtry
     let l:msg = 'cmd=' .. s:hijack['cmd'] .. ' cmd_type=' .. s:hijack['cmd_type'] .. ' typeahead=' .. s:ReadTypeaheadTruncated()
-    call _op_#stack#Pop(l:stack_id .. ' ' .. s:PModes(1), l:msg)
+    call _op_#stack#Pop(l:stack_id, l:msg)
 endfunction
 
 " map the first char of s:hijack_probe to get hijack data
-" Some commands may consume the RHS and start executing, use something unusual
-" lnoremap doesn't actually map i c modes, so we still use noremap!
+" Some commands may consume the RHS and start executing, use unusual single-byte
+" character to avoid conflicts with user mappings
 execute ' noremap  <expr>' .. s:hijack_probe .. ' <sid>HijackProbeMap()'
 execute ' noremap! <expr>' .. s:hijack_probe .. ' <sid>HijackProbeMap()'
 execute 'lnoremap  <expr>' .. s:hijack_probe .. ' <sid>HijackProbeLangMap()'
 execute 'tnoremap  <expr>' .. s:hijack_probe .. ' <sid>HijackProbeMap()'
 
 function s:HijackProbeMap() abort
-    let s:hijack = {'mode': mode(1), 'cmd': getcmdline(), 'cmd_type': getcmdtype(), 'lmap': v:false }
+    let s:hijack = { 'mode': mode(1), 'hmode': mode(1), 'cmd': getcmdline(), 'cmd_type': getcmdtype(), 'lmap': v:false }
     return ''
 endfunction
 
 function s:HijackProbeLangMap() abort
-    let s:hijack = {'mode': mode(1) .. '-l', 'cmd': getcmdline(), 'cmd_type': getcmdtype(), 'lmap': v:true }
+    let s:hijack = { 'mode': mode(1), 'hmode': mode(1) .. '-l', 'cmd': getcmdline(), 'cmd_type': getcmdtype(), 'lmap': v:true }
     return ''
 endfunction
-
-" function s:SetOpMode(handle) abort
-"     if has_key(a:handle, 'operator')
-"         if a:handle['entry_mode'] ==# 'no'
-"             let a:handle['op_mode'] = ( a:handle['cur_start'][1] == getcurpos()[1] )? '' : 'V'
-"         else
-"             let a:handle['op_mode'] = a:handle['entry_mode'][2]
-"         endif
-"     endif
-" endfunction
 
 function s:ParentCallInit(handle) abort
     if _op_#stack#Depth() == 1
@@ -331,7 +322,7 @@ function s:ParentCallInit(handle) abort
     endwhile
 
     " store reduced call
-    call s:Log(s:Pad('ParentCallInit: ', 30) .. 'parent_call =' .. l:parent_call .. '    parent_expr_reduced_so_far+=' .. strcharpart(l:calling_expr, 0, l:count))
+    call s:Log(s:Pad('ParentCallInit: ', 30) .. 'parent_call=' .. l:parent_call .. '    parent_expr_reduced_so_far+=' .. strcharpart(l:calling_expr, 0, l:count))
     let a:handle['parent_call'] = l:parent_call
     if a:handle['type'] !=# 'operand'
         let l:parent_handle['expr_reduced_so_far'] ..= strcharpart(l:calling_expr, 0, l:count)
@@ -352,33 +343,16 @@ function s:ParentCallUpdate(handle) abort
     let l:parent_handle['expr_reduced_so_far'] ..= l:expr
 endfunction
 
-function s:GetState() abort
-    let [ l:mode, l:winid, l:win, l:last_undo ] = [ mode(1), win_getid(), winsaveview(), undotree()['seq_cur'] ]
-    let l:v_state = _op_#utils#GetVisualState()
-    call winrestview(l:win)
-    return { 'mode': l:mode, 'winid': l:winid, 'win': l:win, 'last_undo': l:last_undo, 'v_state': l:v_state }
-endfunction
-
-function s:RestoreState(state) abort
-    let l:mode = a:state['mode']
-    call win_gotoid(a:state['winid'])
-    while a:state['last_undo'] < undotree()['seq_cur']
-        silent undo
-    endwhile
-    call _op_#utils#RestoreVisualState(a:state['v_state'])
-    call winrestview(a:state['win'])
-endfunction
-
 function s:GetCharFromUser(handle) abort
     " extra typeahead may be available if user typed fast
-    if s:hijack['mode'] =~# '\v^(i|i-l)$'
+    if s:hijack['hmode'] =~# '\v^(i|i-l)$'
         let l:char = s:GetCharFromUser_i(a:handle)
-    elseif s:hijack['mode'] =~# '\v^(no[vV]=|consumed|n-l|no-l)$'
+    elseif s:hijack['hmode'] =~# '\v^(no[vV]=|consumed|n-l|no-l)$'
         let l:char = s:GetCharFromUser_no(a:handle)
-    elseif s:hijack['mode'] =~# '\v^(c|c-l)$'
+    elseif s:hijack['hmode'] =~# '\v^(c|c-l)$'
         let l:char = s:GetCharFromUser_c(a:handle)
     else
-        call _op_#op#Throw('cyclops.vim: unsupported hijack mode '.string(s:hijack['mode']))
+        call _op_#op#Throw('cyclops.vim: unsupported hijack mode '.string(s:hijack['hmode']))
     endif
 
     if empty(l:char)
@@ -391,7 +365,7 @@ endfunction
 
 function s:GetCharFromUser_i(handle) abort
     let l:match_ids = []
-    let l:state = s:GetState()
+    let l:state = _op_#utils#GetState()
     try
         " update buffer if waiting for user input
         if !getchar(1)
@@ -403,7 +377,7 @@ function s:GetCharFromUser_i(handle) abort
         let l:char = s:GetCharStr('i')
     finally
         call s:ClearHighlights(l:match_ids)
-        call s:RestoreState(l:state)
+        call _op_#utils#RestoreState(l:state)
     endtry
 
     return l:char
@@ -440,7 +414,6 @@ endfunction
 
 function s:GetCharFromUser_c(handle) abort
     let l:match_ids = []
-    call s:Log(s:Pad('GetCharFromUser_c ' .. s:PModes(2) .. ': ', 30) .. 'cmd_type=' .. s:hijack['cmd_type'] .. ' cmd=' .. s:hijack['cmd'] .. ' input_stream=' .. s:input_stream)
 
     if !getchar(1)
         unsilent echo s:hijack['cmd_type'] .. s:hijack['cmd']
@@ -597,8 +570,8 @@ function s:GetScreenCol(pos) abort
     return virtcol(a:pos[1:3]) ? virtcol(a:pos[1:3]) : a:pos[2]
 endfunction
 
-function _op_#op#Throw(msg)
-    let l:msg = empty(a:msg)? v:exception : a:msg
+function _op_#op#Throw(...)
+    let l:msg = a:0? a:1 : v:exception
     try
         throw 'op#abort'
     catch /op#abort/
@@ -611,21 +584,9 @@ function _op_#op#Throw(msg)
     endtry
 endfunction
 
-function s:PModes(kind) abort
-    let l:hmode = s:hijack['mode']
-
-    let l:hmode =           empty(l:hmode)? '-'   : l:hmode
-    let l:hmode = (l:hmode ==# 'consumed')? 'cns' : l:hmode
-
-    if a:kind == 0
-        return '(' .. mode(1) .. '|)'
-    elseif a:kind == 1
-        return '(|' .. l:hmode .. ')'
-    elseif a:kind == 2
-        return '(' .. mode(1) .. '|' .. l:hmode .. ')'
-    else
-        call _op_#op#Throw('cyclops.vim: invalid PModes kind ' .. string(a:kind))
-    endif
+" use for logging only
+function _op_#op#GetLastHijackMode() abort
+    return s:hijack['hmode']
 endfunction
 
 " function s:SetDefaultRegister() abort

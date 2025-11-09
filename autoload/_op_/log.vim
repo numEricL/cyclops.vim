@@ -3,6 +3,7 @@ set cpo&vim
 
 silent! call _op_#init#settings#Load()
 
+let s:time_start = 0
 let s:debug_log = []
 
 " internal api
@@ -38,8 +39,16 @@ function _op_#log#PrintDebugLog() abort
 endfunction
 
 function _op_#log#Log(msg) abort
-    let l:stack_level = (_op_#stack#Depth())? string(_op_#stack#Depth()-1) : '-'
-    call add(s:debug_log, s:Pad(l:stack_level, 3) . a:msg)
+    if g:cyclops_debug_log_enabled
+        let l:stack_level = (_op_#stack#Depth())? string(_op_#stack#Depth()-1) : '-'
+        if has('float') " perf info
+            let l:elapsed_ms = reltimefloat(reltime(s:time_start)) * 1000
+            let l:elapsed = printf('%.0f', l:elapsed_ms)
+            call add(s:debug_log, s:Pad(l:elapsed, 6) .. s:Pad(l:stack_level, 3) . a:msg)
+        else
+            call add(s:debug_log, s:Pad(l:stack_level, 3) . a:msg)
+        endif
+    endif
 endfunction
 
 function _op_#log#Pad(value, length) abort
@@ -48,7 +57,25 @@ function _op_#log#Pad(value, length) abort
     return a:value . l:pad
 endfunction
 
-function _op_#log#ClearDebugLog() abort
+function _op_#log#PModes(kind) abort
+    let l:hmode = _op_#op#GetLastHijackMode()
+
+    let l:hmode =           empty(l:hmode)? '-'   : l:hmode
+    let l:hmode = (l:hmode ==# 'consumed')? 'cns' : l:hmode
+
+    if a:kind == 0
+        return '(' .. mode(1) .. '|)'
+    elseif a:kind == 1
+        return '(|' .. l:hmode .. ')'
+    elseif a:kind == 2
+        return '(' .. mode(1) .. '|' .. l:hmode .. ')'
+    else
+        call _op_#op#Throw('cyclops.vim: invalid PModes kind ' .. string(a:kind))
+    endif
+endfunction
+
+function _op_#log#InitDebugLog() abort
+    let s:time_start = reltime()
     if !empty(s:debug_log)
         call remove(s:debug_log, 0, len(s:debug_log)-1)
     endif
