@@ -21,32 +21,43 @@ function _op_#utils#ExprWithModifiers(handle) abort
 endfunction
 
 function _op_#utils#GetVisualState() abort
-    let l:mode = mode(1)
-    if l:mode !~# '\v^[nvV]$'
-        call s:Throw('cyclops.vim: GetVisualState called in unsupported mode '.string(l:mode))
-    endif
-
-    let l:selectmode = &selectmode | set selectmode=
-    " exit/re-enter visual mode to get visualmode()
-    silent! execute "normal! \<esc>gv"
-    let &selectmode = l:selectmode
-    let l:v_state = [ visualmode(), getpos('v'), getpos('.') ]
-
-    if l:mode ==# 'n'
-        silent! execute "normal! \<esc>"
+    let l:mode = mode()
+    if l:mode =~# '\v^[vV]$'
+        let l:v_state = [ l:mode, getpos('v'), getpos('.') ]
+    else
+        " TODO: fix to work with reverse orientation
+        let l:v_state = [ visualmode(), getpos("'<"), getpos("'>") ]
     endif
     return l:v_state
 endfunction
 
-function _op_#utils#SetVisualState(v_state) abort
+function _op_#utils#RestoreVisualState(v_state) abort
     let [ l:v_mode, l:v_start, l:v_end ] = a:v_state
-    silent! execute "normal! \<esc>"
-    call setpos('.', l:v_start)
-    let l:selectmode = &selectmode | set selectmode=
-    silent! execute "normal! ".l:v_mode
-    let &selectmode = l:selectmode
-    call setpos('.', l:v_end)
+    let l:enter_mode = mode()
+
+    " temp solution that works most of the time
+    if l:enter_mode =~# '\v^[vV]$'
+        execute "normal! \<esc>"
+    endif
+    call setpos("'<", l:v_start)
+    call setpos("'>", l:v_end)
+    if l:enter_mode =~# '\v^[vV]$'
+        let l:selectmode = &selectmode | set selectmode=
+        normal! gv
+        let &selectmode = l:selectmode
+    endif
 endfunction
+
+" TODO: update to work with operator pending mode
+" function _op#utils#SetVisualState(v_state) abort
+"     let [ l:v_mode, l:v_start, l:v_end ] = a:v_state
+"     silent! execute "normal! \<esc>"
+"     call setpos('.', l:v_start)
+"     let l:selectmode = &selectmode | set selectmode=
+"     silent! execute "normal! ".l:v_mode
+"     let &selectmode = l:selectmode
+"     call setpos('.', l:v_end)
+" endfunction
 
 let &cpo = s:cpo
 unlet s:cpo

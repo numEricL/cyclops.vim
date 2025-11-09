@@ -38,7 +38,8 @@ function _op_#log#PrintDebugLog() abort
 endfunction
 
 function _op_#log#Log(msg) abort
-    call add(s:debug_log, strftime("%S ") .. s:Pad(string(_op_#stack#Depth()), 3) . a:msg)
+    let l:stack_level = (_op_#stack#Depth())? string(_op_#stack#Depth()-1) : '-'
+    call add(s:debug_log, s:Pad(l:stack_level, 3) . a:msg)
 endfunction
 
 function _op_#log#Pad(value, length) abort

@@ -26,6 +26,11 @@ limitations:
 * cannot be nested
 * relies on constantly repeating autocommands or macro recording
 
+## Limitations
+
+iminsert is enabled while processing mappings, this may have unintended side
+effects if language mappings (`:lmap`) are encounted.
+
 ## Sample usage:
 
 Add dot repeat functionality + other goodies to [tpope/vim-surround](https://github.com/tpope/vim-surround)
