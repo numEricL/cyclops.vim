@@ -83,8 +83,8 @@ function _op_#op#ComputeMapCallback() abort range
     " execute computed map and store handle in case of repeat
     if _op_#stack#Depth() == 1
         " expr_with_modifiers stored for debugging
-        call s:Log(s:Pad('ComputeMapCallback: ', 30) .. 'final expr=' .. l:handle['expr_reduced'])
         let l:handle['expr_with_modifiers'] = _op_#utils#ExprWithModifiers(l:handle)
+        call s:Log(s:Pad('ComputeMapCallback EXIT: ', 30) .. 'FEED_tx!=' .. l:handle['expr_with_modifiers'] .. s:ambiguous_map_chars)
         call feedkeys(l:handle['expr_with_modifiers'] .. s:ambiguous_map_chars, 'tx!')
         if l:handle['opts']['silent']
             unsilent echo
@@ -129,7 +129,9 @@ function s:ComputeMapOnStack(handle) abort
         call s:CheckForErrors(l:op .. a:handle['expr_reduced'] .. l:input)
         let a:handle['expr_reduced'] = a:handle['expr_reduced'] .. l:input
         call s:ParentCallUpdate(a:handle)
-        call feedkeys(l:op .. a:handle['expr_reduced'] .. l:input, 'tx!')
+
+        call s:Log(s:Pad('ComputeMapOnStack: EXIT:', 30) .. 'FEED_tx!=' .. l:op .. a:handle['expr_reduced'])
+        call feedkeys(l:op .. a:handle['expr_reduced'], 'tx!')
         call inputrestore()
     endif
 endfunction
@@ -202,7 +204,7 @@ function s:CheckForErrors(expr) abort
     if !g:cyclops_check_for_errors_enabled
         return
     endif
-    call s:Log(s:Pad('CheckForErrors ' .. s:PModes(0) .. ': ', 30) .. 'expr=' .. a:expr .. ' typeahead=' .. s:TypeaheadLog())
+    call s:Log(s:Pad('CheckForErrors ' .. s:PModes(0) .. ': ', 30) .. 'FEED_tx!=' .. a:expr .. ' typeahead=' .. s:TypeaheadLog())
     let l:state = _op_#utils#GetState()
     try
         silent call feedkeys(a:expr, 'tx!')
@@ -227,7 +229,7 @@ function s:ProcessStream(stream, char) abort
 endfunction
 
 function s:ProbeExpr(expr, type) abort
-    let l:msg = 'expr=' .. a:expr .. s:hijack_probe .. '<esc>' .. ' typeahead=' .. s:TypeaheadLog()
+    let l:msg = 'FEED_tx!=' .. a:expr .. '<PROBE>' .. ' typeahead=' .. s:TypeaheadLog()
     let l:stack_id = _op_#stack#Push(a:type, l:msg)
 
     let l:state = _op_#utils#GetState()
@@ -369,6 +371,7 @@ function s:GetCharFromUser_i(handle) abort
     try
         " update buffer if waiting for user input
         if !getchar(1)
+            call s:Log(s:Pad('GetCharFromUser_i' .. ' ' .. s:PModes(0) .. ': ', 30) .. 'FEED_tx=' .. a:handle['expr_reduced'] .. s:input_stream)
             call feedkeys(a:handle['expr_reduced'] .. s:input_stream, 'tx')
             let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
             call add(l:match_ids, matchadd(l:cursor_hl, '\%'.line('.').'l\%'.(col('.')+1).'c'))
@@ -465,6 +468,7 @@ function s:GetCharFromTypeahead(handle) abort
     let l:nr = getchar(0)
     let l:char = nr2char(l:nr)
     if l:char ==# s:hijack_probe
+        call s:Log(s:Pad('GetCharFromTypeahead: ', 30) .. 'PROBE CHAR DETECTED, reinserting probe')
         call feedkeys(s:hijack_probe, 'i')
     endif
     call inputsave()
@@ -506,7 +510,10 @@ function s:ReadTypeaheadTruncated() abort
 endfunction
 
 function s:TypeaheadLog() abort
-    return substitute(s:ReadTypeaheadTruncated(), '\v' .. "\<esc>" .. '{' .. g:cyclops_max_trunc_esc .. '}$', '<esc>...', '')
+    let l:typeahead = s:ReadTypeaheadTruncated()
+    let l:typeahead = substitute(l:typeahead, '\v' .. s:hijack_probe .. s:hijack_esc, '<PROBE>', '')
+    let l:typeahead = substitute(l:typeahead, '\v' .. "\<esc>" .. '{' .. g:cyclops_max_trunc_esc .. '}$', '<esc>...', '')
+    return l:typeahead
 endfunction
 
 function s:StealTypeahead() abort
