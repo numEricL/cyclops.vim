@@ -24,7 +24,7 @@ function _op_#utils#GetState() abort
     let [ l:winid, l:win, l:last_undo ] = [ win_getid(), winsaveview(), undotree()['seq_cur'] ]
     let l:v_state = _op_#utils#GetVisualState()
     call winrestview(l:win)
-    return { 'mode': l:mode, 'winid': l:winid, 'win': l:win, 'last_undo': l:last_undo, 'v_state': l:v_state }
+    return { 'winid': l:winid, 'win': l:win, 'last_undo': l:last_undo, 'v_state': l:v_state }
 endfunction
 
 function _op_#utils#RestoreState(state) abort
