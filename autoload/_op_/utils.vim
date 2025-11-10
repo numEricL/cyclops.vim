@@ -21,14 +21,13 @@ function _op_#utils#ExprWithModifiers(handle) abort
 endfunction
 
 function _op_#utils#GetState() abort
-    let [ l:mode, l:winid, l:win, l:last_undo ] = [ mode(1), win_getid(), winsaveview(), undotree()['seq_cur'] ]
+    let [ l:winid, l:win, l:last_undo ] = [ win_getid(), winsaveview(), undotree()['seq_cur'] ]
     let l:v_state = _op_#utils#GetVisualState()
     call winrestview(l:win)
     return { 'mode': l:mode, 'winid': l:winid, 'win': l:win, 'last_undo': l:last_undo, 'v_state': l:v_state }
 endfunction
 
 function _op_#utils#RestoreState(state) abort
-    let l:mode = a:state['mode']
     call win_gotoid(a:state['winid'])
     while a:state['last_undo'] < undotree()['seq_cur']
         silent undo
@@ -38,59 +37,32 @@ function _op_#utils#RestoreState(state) abort
 endfunction
 
 function _op_#utils#GetVisualState() abort
-    let l:mode = mode()
-    if l:mode =~# '\v^[vV]$'
-        let l:v_state = [ l:mode, l:mode, getpos('v'), getpos('.') ]
-    else
-        " TODO: fix to work with reverse orientation
-        let l:v_state = [ l:mode, visualmode(), getpos("'<"), getpos("'>") ]
+    if mode(1) !~# '\v^[nvV]$'
+        call _op_#op#Throw('cyclops.vim: unsupported mode for restoring visual state: ' .. mode(1))
     endif
-    return l:v_state[1:3]
+    return [ mode(), getpos("'<"), getpos("'>"), visualmode(), getpos('v'), getpos('.') ]
 endfunction
 
-" function _op_#utils#RestoreVisualState(v_state) abort
-"     let [ l:mode, l:v_mode, l:v_start, l:v_end ] = a:v_state
-"
-"     " temp solution that works most of the time
-"     if l:mode =~# '\v^[vV]$'
-"         execute "normal! \<esc>"
-"     endif
-"     call setpos("'<", l:v_start)
-"     call setpos("'>", l:v_end)
-"     if l:mode =~# '\v^[vV]$'
-"         let l:selectmode = &selectmode | set selectmode=
-"         normal! gv
-"         let &selectmode = l:selectmode
-"     endif
-" endfunction
-
 function _op_#utils#RestoreVisualState(v_state) abort
-    let [ l:v_mode, l:v_start, l:v_end ] = a:v_state
-    let l:enter_mode = mode()
+    let [ l:mode, l:vmark_start, l:vmark_end, l:visual_mode, l:v_start, l:v_end ] = a:v_state
 
-    " temp solution that works most of the time
-    if l:enter_mode =~# '\v^[vV]$'
-        execute "normal! \<esc>"
+    if mode(1) !~# '\v^[nvV]$'
+        call _op_#op#Throw('cyclops.vim: unsupported mode for restoring visual state: ' .. mode(1))
     endif
-    call setpos("'<", l:v_start)
-    call setpos("'>", l:v_end)
-    if l:enter_mode =~# '\v^[vV]$'
+
+    " reset the previous visualmode (e.g. for gv)
+    execute "normal! \<esc>" .. l:visual_mode .. "\<esc>"
+    call setpos("'<", l:vmark_start)
+    call setpos("'>", l:vmark_end)
+
+    if l:mode =~# '\v^[vV]$'
         let l:selectmode = &selectmode | set selectmode=
-        normal! gv
+        call setpos('.', l:v_start)
+        execute "normal! ".l:visual_mode
+        call setpos('.', l:v_end)
         let &selectmode = l:selectmode
     endif
 endfunction
-
-" TODO: update to work with operator pending mode
-" function _op#utils#SetVisualState(v_state) abort
-"     let [ l:v_mode, l:v_start, l:v_end ] = a:v_state
-"     silent! execute "normal! \<esc>"
-"     call setpos('.', l:v_start)
-"     let l:selectmode = &selectmode | set selectmode=
-"     silent! execute "normal! ".l:v_mode
-"     let &selectmode = l:selectmode
-"     call setpos('.', l:v_end)
-" endfunction
 
 let &cpo = s:cpo
 unlet s:cpo

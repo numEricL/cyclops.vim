@@ -357,7 +357,9 @@ function s:GetCharFromUser(handle) abort
         call _op_#op#Throw('cyclops.vim: unsupported hijack mode '.string(s:hijack['hmode']))
     endif
 
-    if empty(l:char)
+    if l:char ==# "\<esc>"
+        call _op_#op#Throw('cyclops.vim: interrupt (<esc>)')
+    elseif empty(l:char)
         call _op_#op#Throw('cyclops.vim: empty char received from user')
     endif
 
