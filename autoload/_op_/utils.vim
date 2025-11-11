@@ -10,7 +10,7 @@ function _op_#utils#ExprWithModifiers(handle) abort
     let l:mods = a:handle['mods']
 
     let l:register = (l:opts['accepts_register'])? '"' .. l:mods['register'] : ''
-    let l:expr_with_modifiers = l:register .. a:handle['expr_reduced']
+    let l:expr_with_modifiers = l:register .. a:handle['op'] .. a:handle['expr_reduced']
 
     if l:opts['accepts_count'] && l:mods['count1'] != 1
         let l:expr_with_modifiers = l:mods['count1'].l:expr_with_modifiers

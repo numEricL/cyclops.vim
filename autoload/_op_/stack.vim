@@ -42,7 +42,8 @@ function _op_#stack#Init(init_func) abort
             call remove(s:debug_stack, 0, -1)
         endif
         call _op_#log#InitDebugLog()
-        call s:Push('operator', 'StackInit')
+        let l:type = (mode(1)[:1] !=# 'no')? 'operator' : 'operand'
+        call s:Push(l:type, 'StackInit')
     endif
 endfunction
 
