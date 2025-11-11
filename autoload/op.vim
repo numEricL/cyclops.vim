@@ -15,14 +15,16 @@ let s:RegisterNoremap   = function('_op_#init#RegisterNoremap')
 function op#Map(map, ...) abort range
     call s:AssertExprMap()
     call s:InitCallback('op', a:map, s:ExtendDefaultOpts(a:000))
-    return "\<cmd>call _op_#op#ComputeMapCallback()\<cr>"
+    let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
+    return l:omap_esc .. "\<cmd>call _op_#op#ComputeMapCallback()\<cr>"
 endfunction
 
 function op#Noremap(map, ...) abort range
     call s:AssertExprMap()
     let l:map = s:RegisterNoremap(a:map)
     call s:InitCallback('op', l:map, s:ExtendDefaultOpts(a:000))
-    return "\<cmd>call _op_#op#ComputeMapCallback()\<cr>"
+    let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
+    return l:omap_esc .. "\<cmd>call _op_#op#ComputeMapCallback()\<cr>"
 endfunction
 
 function op#PrintDebugLog() abort

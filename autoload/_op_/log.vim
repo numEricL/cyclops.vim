@@ -20,16 +20,13 @@ function _op_#log#PrintScriptVars() abort range
         echomsg ' '
         call s:PrintDict(l:handle, '')
     endfor
-    for [ l:op_type, l:handle ] in items(_op_#op#GetHandles())
+    for [ l:handle_type, l:handle ] in items(_op_#op#GetHandles())
         if !empty(l:handle)
             echomsg ' '
-            call s:PrintDict(l:handle, '['.l:op_type.']')
+            call s:PrintDict(l:handle, '['.l:handle_type.']')
         endif
     endfor
     echomsg ' '
-    for l:line in execute('let s:')->split("\n")->filter('v:val !~# '.string('\v(handles|stack|debug)'))->sort()
-        echomsg s:ToPrintable(l:line)
-    endfor
 endfunction
 
 function _op_#log#PrintDebugLog() abort

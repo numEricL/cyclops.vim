@@ -5,6 +5,10 @@ silent! call _op_#init#settings#Load()
 
 " internal utils
 
+let s:Pad    = function('_op_#log#Pad')
+let s:Log    = function('_op_#log#Log')
+let s:PModes = function('_op_#log#PModes')
+
 function _op_#utils#ExprWithModifiers(handle) abort
     let l:opts = a:handle['opts']
     let l:mods = a:handle['mods']
@@ -17,6 +21,9 @@ function _op_#utils#ExprWithModifiers(handle) abort
     elseif !l:opts['accepts_count']
         let l:expr_with_modifiers = repeat(l:expr_with_modifiers, l:mods['count1'])
     endif
+
+    " expr_with_modifiers stored for debugging
+    let a:handle['expr_with_modifiers'] = l:expr_with_modifiers
     return l:expr_with_modifiers
 endfunction
 
@@ -37,7 +44,7 @@ function _op_#utils#RestoreState(state) abort
 endfunction
 
 function _op_#utils#GetVisualState() abort
-    if mode(1) !~# '\v^[nvV]$'
+    if mode(0) !~# '\v^[nvV]$'
         call _op_#op#Throw('cyclops.vim: unsupported mode for restoring visual state: ' .. mode(1))
     endif
     return [ mode(), getpos("'<"), getpos("'>"), visualmode(), getpos('v'), getpos('.') ]
@@ -46,7 +53,7 @@ endfunction
 function _op_#utils#RestoreVisualState(v_state) abort
     let [ l:mode, l:vmark_start, l:vmark_end, l:visual_mode, l:v_start, l:v_end ] = a:v_state
 
-    if mode(1) !~# '\v^[nvV]$'
+    if mode(0) !~# '\v^[nvV]$'
         call _op_#op#Throw('cyclops.vim: unsupported mode for restoring visual state: ' .. mode(1))
     endif
 
@@ -58,7 +65,7 @@ function _op_#utils#RestoreVisualState(v_state) abort
     if l:mode =~# '\v^[vV]$'
         let l:selectmode = &selectmode | set selectmode=
         call setpos('.', l:v_start)
-        execute "normal! ".l:visual_mode
+        execute "normal! " .. l:mode
         call setpos('.', l:v_end)
         let &selectmode = l:selectmode
     endif

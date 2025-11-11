@@ -2,6 +2,11 @@
 " internal op# interface
 "
 
+"TODO: #Noremap should instead use no remap during feedkeys, then dd should work
+"as expected
+
+"TODO: use neovim virtual text instead of actual insertion during HijackInput
+
 let s:cpo = &cpo
 set cpo&vim
 
@@ -12,7 +17,8 @@ let s:hijack_probe = '×'
 let s:hijack_esc = repeat("\<esc>", 3)
 
 " n-l no-l catches f, F, t, T in lang mode (e.g. fa and dfa)
-let s:operator_mode_pattern = '\v^(no[vV]=|consumed|i|c|n-l|no-l|c-l|i-l)$'
+" this pattern matches also n-l-l, but that mode is not possible and this pattern is simpler
+let s:operator_hmode_pattern = '\v^(no[vV]?|consumed|i|c|n-l)(-l)?$'
 
 let s:hijack = {'hmode': '', 'cmd': '', 'cmd_type': '', 'lmap': ''}
 let s:input_stream = ''
@@ -29,8 +35,8 @@ function _op_#op#GetHandles() abort
     return s:handles
 endfunction
 
-function _op_#op#GetHandle(op_type) abort
-    return _op_#op#GetHandles()[a:op_type]
+function _op_#op#GetHandle(handle_type) abort
+    return _op_#op#GetHandles()[a:handle_type]
 endfunction
 
 function s:InitScriptVars()
@@ -42,7 +48,7 @@ function s:InitScriptVars()
     endif
 endfunction
 
-function _op_#op#InitCallback(op_type, expr, opts) abort
+function _op_#op#InitCallback(handle_type, expr, opts) abort
     if mode(1) !~# '\v^(n|v|V||no|nov|noV|no)$'
         throw 'cyclops.vim: Entry mode '.string(mode(1)).' not yet supported.'
     endif
@@ -51,7 +57,7 @@ function _op_#op#InitCallback(op_type, expr, opts) abort
 
     call extend(l:handle, { 'opts' : a:opts } )
     call extend(l:handle, { 'init' : {
-                \ 'op_type'    : a:op_type,
+                \ 'handle_type'    : a:handle_type,
                 \ 'entry_mode' : mode(1),
                 \ 'v:operator' : v:operator,
                 \   } } )
@@ -75,22 +81,19 @@ function _op_#op#ComputeMapCallback() abort range
 
     " reduces nested op# exprs and concatenates with their inputs
     call s:ComputeMapOnStack(l:handle)
-    return
 
     if _op_#stack#Depth() == 1 || l:handle['type'] ==# 'operand'
-        call s:StoreHandle(l:handle)
-    endif
-
-    " execute computed map and store handle in case of repeat
-    if _op_#stack#Depth() == 1
-        " expr_with_modifiers stored for debugging
         let l:expr_with_modifiers = _op_#utils#ExprWithModifiers(l:handle)
-        call s:Log(s:Pad('EXIT ' .. s:PModes(0) .. ': ', 30) .. 'FEED_tx!=' .. l:expr_with_modifiers .. s:ambiguous_map_chars)
-        call feedkeys(l:expr_with_modifiers .. s:ambiguous_map_chars, 'tx!')
-        if l:handle['opts']['silent']
-            unsilent echo
+        call s:StoreHandle(l:handle)
+
+        if _op_#stack#Depth() == 1
+            call s:Log(s:Pad('EXIT ' .. s:PModes(0) .. ': ', 30) .. 'FEED_tx!=' .. l:expr_with_modifiers .. s:ambiguous_map_chars)
+            call feedkeys(l:expr_with_modifiers .. s:ambiguous_map_chars, 'tx!')
+            if l:handle['opts']['silent']
+                unsilent echo
+            endif
+            call _op_#stack#Pop(0, 'StackInit')
         endif
-        call _op_#stack#Pop(0, 'StackInit')
     endif
 endfunction
 
@@ -104,15 +107,13 @@ function s:ComputeMapOnStack(handle) abort
             call s:Log(s:Pad('ComputeMapOnStack: ', 30) .. 'ambiguous map chars=' .. s:ambiguous_map_chars)
         endif
         if (a:handle['type'] ==# 'operand')
-            let a:handle['op'] = a:handle['init']['v:operator']
-            " normal! <esc> doesn't cancel operator pending mode, use feedkeys instead
-            call feedkeys("\<esc>", 'x')
-            return
+            " if stack depth is >1 then op is the parent call and set in other branch
+            let a:handle['op'] = a:handle['init']['v:operator'] .. a:handle['init']['entry_mode'][2]
         endif
 
         try
             " recursion typically happens at this ProbeExpr call, but can also
-            " happen in HijackInput if an operator pending map is triggered
+            " happen in HijackInput if a registered omap is triggered
 
             call s:ProbeExpr(a:handle['op'] .. a:handle['expr_orig'], a:handle['type'])
             let l:input = s:HijackInput(a:handle)
@@ -130,9 +131,7 @@ function s:ComputeMapOnStack(handle) abort
         call inputsave()
 
         call s:ProbeExpr(a:handle['op'] .. a:handle['expr_orig'], a:handle['type'])
-
         let l:input = s:HijackInput(a:handle)
-
         call s:CheckForErrors(a:handle['op'] .. a:handle['expr_reduced'] .. l:input)
         let a:handle['expr_reduced'] ..= l:input
         call s:ParentCallUpdate(a:handle)
@@ -145,7 +144,7 @@ endfunction
 
 function s:HijackInput(handle) abort
     call s:Log(s:Pad('HijackInput ' .. s:PModes(2) .. ': ', 30))
-    if s:hijack['hmode'] !~# s:operator_mode_pattern
+    if s:hijack['hmode'] !~# s:operator_hmode_pattern
         call s:Log(s:Pad('HijackInput EXIT: ', 30) .. 'non-operator mode detected: mode=' .. s:hijack['hmode'])
         return ''
     endif
@@ -160,22 +159,22 @@ function s:HijackInput(handle) abort
     let l:op = a:handle['op']
     let l:expr = a:handle['expr_reduced']
 
-    call s:Log(s:Pad('HijackInput GET INPUT: ', 30) .. 'expr=' .. l:op .. l:expr .. ' typeahead=' .. s:TypeaheadLog())
+    " call s:Log(s:Pad('HijackInput GET INPUT: ', 30) .. 'expr=' .. l:op .. l:expr .. ' typeahead=' .. s:TypeaheadLog())
 
-    while !empty(s:ambiguous_map_chars) && s:hijack['hmode'] =~# s:operator_mode_pattern
+    while !empty(s:ambiguous_map_chars) && s:hijack['hmode'] =~# s:operator_hmode_pattern
         let l:ambig_char = strcharpart(s:ambiguous_map_chars, 0, 1)
         let s:ambiguous_map_chars = strcharpart(s:ambiguous_map_chars, 1)
         let s:input_stream ..= l:ambig_char
         call s:ProbeExpr(l:op .. l:expr .. s:input_stream, 'operand')
     endwhile
 
-    if s:hijack['hmode'] =~# s:operator_mode_pattern
+    if s:hijack['hmode'] =~# s:operator_hmode_pattern
         if a:handle['input_source'] ==# 'user'
-            while s:hijack['hmode'] =~# s:operator_mode_pattern
+            while s:hijack['hmode'] =~# s:operator_hmode_pattern
                 let l:char = s:GetCharFromUser(a:handle)
-                call s:Log(s:Pad('HijackInput ' .. s:PModes(2) .. ' GOT: ', 30) .. 'char=' .. l:char)
                 let s:input_stream = s:ProcessStream(s:input_stream, l:char)
-                if s:hijack['hmode'] ==# 'no-l'
+                if s:hijack['hmode'] =~# '\v^no[vV]?-l$'
+                    call s:Log(s:Pad('HijackInput no-l break: ', 30))
                     " Problem: feedkeys('dfa×') ends in (lang) operator pending mode
                     " Workaround: break out of loop early if detected
                     " let s:hijack['hmode'] = 'n'
@@ -186,13 +185,13 @@ function s:HijackInput(handle) abort
             unsilent echo
             redraw
         else
-            while s:hijack['hmode'] =~# s:operator_mode_pattern
+            while s:hijack['hmode'] =~# s:operator_hmode_pattern
                 let s:input_stream ..= s:GetCharFromTypeahead(a:handle)
                 call s:ProbeExpr(l:op .. l:expr .. s:input_stream, 'operand')
             endwhile
         endif
     endif
-    call s:Log(s:Pad('HijackInput: ', 30) .. 'input_stream=' .. s:input_stream)
+    " call s:Log(s:Pad('HijackInput: ', 30) .. 'input_stream=' .. s:input_stream)
 
     " store
     if a:handle['type'] ==# 'operand'
@@ -300,14 +299,19 @@ function s:ParentCallInit(handle) abort
     " Note: the parent (up to this point) is the set complement of previous expr
     " and current typeahead (less the hijack stream)
 
-    " calling_expr = [already executed] . [current map call] . [typeahead] . [hijack_probe]
+    " calling_expr = [already executed] .. [current map call] .. [omap input] .. [typeahead] .. [hijack_probe]
     let l:parent_handle = _op_#stack#GetPrev(a:handle)
     let l:calling_expr = l:parent_handle['expr_reduced']
 
+
+    call s:Log('OMAP: s:input_stream=' .. s:input_stream)
+    call s:Log('OMAP: this expr=     ' .. a:handle['expr_orig'])
+
+
     " remove remnants of hijack_probe .. hijack_esc placed by HijackInput
     let l:typeahead = s:ReadTypeahead()
-    let l:typeahead = substitute(l:typeahead, '\V' .. "\<esc>" .. '\+\$', '', '')
-    let l:typeahead = substitute(l:typeahead, '\V' .. s:hijack_probe .. '\$', '', '')
+    call s:Log(s:Pad('ParentCallInit: ', 30) .. 'calling_expr=' .. l:calling_expr .. ' typeahead=' .. l:typeahead)
+    let l:typeahead = substitute(l:typeahead, '\V' .. s:hijack_probe .. s:hijack_esc .. '\$', '', '')
 
     " [already executed] .. [current map call] .. [typeahead] -> [current map call]
     let l:calling_expr = substitute(l:calling_expr, '\V' .. escape(l:typeahead, '\') .. '\$', '', '')
@@ -321,7 +325,7 @@ function s:ParentCallInit(handle) abort
         let l:mode = 'x'
     elseif a:handle['init']['entry_mode'] =~# '\v^[sS]$'
         let l:mode = 's'
-    elseif a:handle['init']['entry_mode'] =~# '\v^no.=$'
+    elseif a:handle['init']['entry_mode'] =~# '\v^no.?$'
         let l:mode = 'o'
     endif
     let l:count = 0
@@ -333,9 +337,7 @@ function s:ParentCallInit(handle) abort
     " store reduced call
     call s:Log(s:Pad('ParentCallInit: ', 30) .. 'parent_call=' .. l:parent_call .. '    parent_expr_reduced_so_far+=' .. strcharpart(l:calling_expr, 0, l:count))
     let a:handle['parent_call'] = l:parent_call
-    if a:handle['type'] !=# 'operand'
-        let l:parent_handle['expr_reduced_so_far'] ..= strcharpart(l:calling_expr, 0, l:count)
-    endif
+    let l:parent_handle['expr_reduced_so_far'] ..= strcharpart(l:calling_expr, 0, l:count)
 endfunction
 
 function s:ParentCallUpdate(handle) abort
@@ -355,7 +357,7 @@ function s:GetCharFromUser(handle) abort
     " extra typeahead may be available if user typed fast
     if s:hijack['hmode'] =~# '\v^(i|i-l)$'
         let l:char = s:GetCharFromUser_i(a:handle)
-    elseif s:hijack['hmode'] =~# '\v^(no[vV]=|consumed|n-l|no-l)$'
+    elseif s:hijack['hmode'] =l# '\v^(no[vV]?|consumed|n-l)(-l)?$'
         let l:char = s:GetCharFromUser_no(a:handle)
     elseif s:hijack['hmode'] =~# '\v^(c|c-l)$'
         let l:char = s:GetCharFromUser_c(a:handle)
@@ -369,7 +371,7 @@ function s:GetCharFromUser(handle) abort
         call _op_#op#Throw('cyclops.vim: empty char received from user')
     endif
 
-    " call s:Log(s:Pad('GetCharFromUser: ', 30) .. 'GOT' .. ' char=' .. l:char)
+    call s:Log(s:Pad('GetCharFromUser: ' .. s:PModes(2) .. ' GOT: ', 30) .. 'char=' .. l:char)
     return l:char
 endfunction
 
@@ -563,7 +565,7 @@ function s:StoreHandle(handle) abort
     call remove(l:handle_to_store, 'stack_level')
     call remove(l:handle_to_store, 'stack_id')
 
-    let l:name = a:handle['init']['op_type']
+    let l:name = a:handle['init']['handle_type']
     let s:handles[l:name] = l:handle_to_store
 endfunction
 

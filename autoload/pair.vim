@@ -117,7 +117,7 @@ function s:PairRepeat(direction, count, register, mode) abort
                     \ 'expr_so_far'      : '',
                     \ 'input_cache'      : deepcopy(l:stored_handle['inputs']),
                     \ 'input_source'     : 'input_cache',
-                    \ 'op_type'          : 'pair',
+                    \ 'handle_type'          : 'pair',
                     \ 'pair'             : deepcopy(l:stored_handle['pair']),
                     \ 'pair_id'          : l:id,
                     \ 'pair_state'       : l:stored_handle['pair_state'],
@@ -146,7 +146,7 @@ endfunction
 "         else
 "             call _op_#stack#Init()
 "             let l:top_handle = _op_#stack#Top()
-"             call extend(l:top_handle, { 'op_type': 'pair', 'expr': l:handle['pair'][l:id], 'pair': deepcopy(l:handle['pair']) })
+"             call extend(l:top_handle, { 'handle_type': 'pair', 'expr': l:handle['pair'][l:id], 'pair': deepcopy(l:handle['pair']) })
 "             call extend(l:top_handle, { 'accepts_count': l:handle['accepts_count'], 'accepts_register': l:handle['accepts_register'] })
 "             call extend(l:top_handle, { 'shift_marks': l:handle['shift_marks'], 'visual_motion': l:handle['visual_motion'] })
 "             call extend(l:top_handle, { 'input_cache': get(l:handle, 'input_cache', []), 'input_source': 'input_cache', 'pair_id': l:id })
@@ -166,8 +166,8 @@ function s:RegisterNoremap(map) abort
     execute "return ".op#SID()."RegisterNoremap(a:map)"
 endfunction
 
-function s:InitCallback(op_type, expr, opts) abort
-    execute "return ".op#SID()."InitCallback(a:op_type, a:expr, a:opts)"
+function s:InitCallback(handle_type, expr, opts) abort
+    execute "return ".op#SID()."InitCallback(a:handle_type, a:expr, a:opts)"
 endfunction
 
 function s:InitPairCallback(pair, dir, opts) abort
@@ -180,18 +180,18 @@ function s:InitPairCallback(pair, dir, opts) abort
                 \ } } )
 endfunction
 
-function s:PairComputeMapCallback(op_type) abort
+function s:PairComputeMapCallback(handle_type) abort
     execute "call ".op#SID()."ComputeMapCallback()"
 
-    if a:op_type ==# 'init'
+    if a:handle_type ==# 'init'
         let l:handle = s:GetHandle('pair')
         let l:id = l:handle['pair']['id']
     endif
 
 endfunction
 
-function s:GetHandle(op_type) abort
-    execute "return ".op#SID()."GetHandle(a:op_type)"
+function s:GetHandle(handle_type) abort
+    execute "return ".op#SID()."GetHandle(a:handle_type)"
 endfunction
 
 function s:InitRepeat(handle, count, register, mode) abort

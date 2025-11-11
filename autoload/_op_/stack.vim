@@ -73,7 +73,7 @@ endfunction
 function _op_#stack#Pop(...) abort
     let l:stack_id = (a:0 >= 1)? a:1 : '-'
     let l:tag      = (a:0 >= 2)? a:2 : ''
-    call _op_#log#Log(_op_#log#Pad('↑↑↑↑ Pop  ' .. l:stack_id .. ' ' .. _op_#log#PModes(1) .. ': ', 30) .. l:tag)
+    call _op_#log#Log(_op_#log#Pad('↑↑↑↑ Pop  ' .. l:stack_id .. ' ' .. _op_#log#PModes(2) .. ': ', 30) .. l:tag)
     call remove(s:stack, -1)
 endfunction
 
