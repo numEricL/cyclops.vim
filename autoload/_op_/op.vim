@@ -21,10 +21,11 @@ let s:hijack_esc = repeat("\<esc>", 3)
 " this pattern matches also n-l-l and v-l-l, but these modes are not possible and this pattern is simpler
 let s:operator_hmode_pattern = '\v^(no[vV]?|consumed|i|c|[nv]-l)(-l)?$'
 
-let s:hijack = {'hmode': '', 'cmd': '', 'cmd_type': '', 'lmap': ''}
+let s:hijack = {'hmode': '', 'cmd': '', 'cmd_type': ''}
 let s:input_stream = ''
 let s:ambiguous_map_chars = ''
 let s:inputs = []
+let s:probe_exception = { 'status': v:false, 'expr': '', 'exception': '' }
 
 let s:handles = { 'op': {}, 'dot': {}, 'pair': {} }
 
@@ -41,7 +42,9 @@ endfunction
 
 function s:InitScriptVars()
     let s:input_stream = ''
-    let s:hijack = {'hmode': '', 'cmd': '', 'cmd_type': '', 'lmap': ''} " init early for s:Log
+    let s:hijack = {'hmode': '', 'cmd': '', 'cmd_type': ''} " init early for s:Log
+    call extend(s:hijack, { 'hmode': '', 'cmd': '', 'cmd_type': '' } )
+    call extend(s:probe_exception, { 'status': v:false, 'expr': '', 'exception': '' } )
     let s:ambiguous_map_chars = ''
     if !empty(s:inputs)
         call remove(s:inputs, 0, -1)
@@ -88,9 +91,10 @@ function _op_#op#ComputeMapCallback() abort range
 
     if _op_#stack#Depth() == 1
         call s:Log('EXIT', s:PModes(0), 'FEED_tx!=' .. l:expr_with_modifiers .. s:ambiguous_map_chars)
-        call feedkeys(l:expr_with_modifiers .. s:ambiguous_map_chars, 'tx!')
         if l:handle['opts']['silent']
-            unsilent echo
+            silent call feedkeys(l:expr_with_modifiers .. s:ambiguous_map_chars, 'tx!')
+        else
+            call feedkeys(l:expr_with_modifiers .. s:ambiguous_map_chars, 'tx!')
         endif
         call _op_#stack#Pop(0, 'StackInit')
     endif
@@ -112,7 +116,7 @@ function s:ComputeMapOnStack(handle) abort
 
             call s:ProbeExpr(a:handle['init']['op'] .. a:handle['expr_orig'], 'expr_orig')
             let l:input = s:HijackInput(a:handle)
-            call s:CheckForErrors(a:handle['init']['op'] .. a:handle['expr_reduced'] .. l:input)
+            call s:CheckForProbeErrors()
             let a:handle['expr_reduced'] ..= l:input
         catch /op#abort/
             echohl ErrorMsg | echomsg _op_#stack#GetException() | echohl None
@@ -124,7 +128,7 @@ function s:ComputeMapOnStack(handle) abort
 
         call s:ProbeExpr(a:handle['init']['op'] .. a:handle['expr_orig'], 'expr_orig')
         let l:input = s:HijackInput(a:handle)
-        call s:CheckForErrors(a:handle['init']['op'] .. a:handle['expr_reduced'] .. l:input)
+        call s:CheckForProbeErrors()
         let a:handle['expr_reduced'] ..= l:input
         call s:ParentCallUpdate(a:handle)
 
@@ -206,22 +210,10 @@ function s:HijackInput(handle) abort
     return l:input_stream
 endfunction
 
-function s:CheckForErrors(expr) abort
-    if !g:cyclops_check_for_errors_enabled
-        return
+function s:CheckForProbeErrors() abort
+    if s:probe_exception['status']
+        call _op_#op#Throw('cyclops.vim: Exception detected while processing ' .. s:probe_exception['expr'] .. ': ' .. s:probe_exception['exception'])
     endif
-    call s:Log('CheckForErrors', s:PModes(0), 'FEED_tx!=' .. a:expr .. ' typeahead=' .. s:TypeaheadLog())
-    let l:state = _op_#utils#GetState()
-    try
-        silent call feedkeys(a:expr, 'tx!')
-        if getchar(1)
-            call _op_#op#Throw('cyclops.vim: Incomplete command while processing operator')
-        endif
-    catch
-        call _op_#op#Throw()
-    finally
-        call _op_#utils#RestoreState(l:state)
-    endtry
 endfunction
 
 function s:ProcessStream(stream, char) abort
@@ -241,7 +233,7 @@ function s:ProbeExpr(expr, type) abort
     let l:state = _op_#utils#GetState()
 
     " HijackProbMap may be consumed instead of expanded, set default case
-    let s:hijack = {'hmode': 'consumed', 'cmd': '', 'cmd_type': '', 'lmap': '' }
+    let s:hijack = { 'hmode': 'consumed', 'cmd': '', 'cmd_type': '' }
 
     " vim uses these timeouts for feedkeys, neovim apparently does not
     let [ l:timeout, l:timeoutlen ] = [ &timeout, &timeoutlen ] | set timeout timeoutlen=0
@@ -259,8 +251,14 @@ function s:ProbeExpr(expr, type) abort
     catch /op#abort/
         throw 'op#abort'
     catch
-        call s:Log('** Exception in ProbeExpr **', v:exception)
-        call s:Log('** Exception in ProbeExpr **', v:throwpoint)
+        call extend(s:probe_exception, {
+                \ 'status': v:true,
+                \ 'expr': a:expr,
+                \ 'exception': v:exception,
+                \ } )
+        call s:Log('** Probe Exception **', a:expr)
+        call s:Log('** Probe Exception **', v:exception)
+        call s:Log('** Probe Exception **', v:throwpoint)
     finally
         let &belloff = l:belloff
         let &iminsert = l:iminsert
@@ -280,12 +278,12 @@ execute 'lnoremap  <expr>' .. s:hijack_probe .. ' <sid>HijackProbeLangMap()'
 execute 'tnoremap  <expr>' .. s:hijack_probe .. ' <sid>HijackProbeMap()'
 
 function s:HijackProbeMap() abort
-    let s:hijack = { 'hmode': mode(1), 'cmd': getcmdline(), 'cmd_type': getcmdtype(), 'lmap': v:false }
+    let s:hijack = { 'hmode': mode(1), 'cmd': getcmdline(), 'cmd_type': getcmdtype() }
     return ''
 endfunction
 
 function s:HijackProbeLangMap() abort
-    let s:hijack = { 'hmode': mode(1) .. '-l', 'cmd': getcmdline(), 'cmd_type': getcmdtype(), 'lmap': v:true }
+    let s:hijack = { 'hmode': mode(1) .. '-l', 'cmd': getcmdline(), 'cmd_type': getcmdtype() }
     return ''
 endfunction
 
