@@ -8,7 +8,7 @@ set cpo&vim
 silent! call _op_#init#settings#Load()
 
 function _op_#dot#ComputeMapCallback(dummy) abort
-    call s:RestoreEntryMode(_op_#stack#Top())
+    call s:RestoreEntry(_op_#stack#Top())
     call _op_#op#ComputeMapCallback()
     let &operatorfunc = '_op_#dot#DotCallback'
 endfunction
@@ -42,8 +42,10 @@ function _op_#dot#RepeatOpPending() abort
     endif
 endfunction
 
-function s:RestoreEntryMode(handle) abort
-    if a:handle['init']['entry_mode'] =~# '\v^[vV]$'
+function s:RestoreEntry(handle) abort
+    if a:handle['init']['entry_mode'] ==# 'n'
+        call setpos('.', a:handle['dot']['cur_start'])
+    elseif a:handle['init']['entry_mode'] =~# '\v^[vV]$'
         let l:selectmode = &selectmode | set selectmode=
         normal! gv
         let &selectmode = l:selectmode

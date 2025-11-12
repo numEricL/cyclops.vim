@@ -23,7 +23,6 @@ function dot#Map(map, ...) abort range
 endfunction
 
 function dot#Noremap(map, ...) abort range
-    echom 'dot#Noremap called with map: ' .. a:map
     call s:AssertExprMap()
     let l:map = s:RegisterNoremap(a:map)
     call s:InitCallback(l:map, s:ExtendDefaultOpts(a:000))
@@ -53,10 +52,10 @@ function s:InitCallback(expr, opts) abort
     "             \ "'[" : getpos("'["),
     "             \ "']" : getpos("']"),
     "             \ } } )
-    " call extend(l:handle, { 'dot' : {
-    "             \ 'v_mode' : visualmode(),
-    "             \ 'cur_start' : getcurpos(),
-    "             \ } } )
+    call extend(l:handle, { 'dot' : {
+                \ 'cur_start' : getcurpos(),
+                \ } } )
+                " \ 'v_mode' : visualmode(),
 endfunction
 
 function s:SetMap(mapping_type, map, opts_dict) abort

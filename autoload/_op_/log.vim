@@ -35,16 +35,21 @@ function _op_#log#PrintDebugLog() abort
     endfor
 endfunction
 
-function _op_#log#Log(msg) abort
+function _op_#log#Log(...) abort
     if g:cyclops_debug_log_enabled
         let l:stack_level = (_op_#stack#Depth())? string(_op_#stack#Depth()-1) : '-'
+        let l:prefix = s:Pad(l:stack_level, 3)
         if has('float') " perf info
             let l:elapsed_ms = reltimefloat(reltime(s:time_start)) * 1000
             let l:elapsed = printf('%.0f', l:elapsed_ms)
-            call add(s:debug_log, s:Pad(l:elapsed, 6) .. s:Pad(l:stack_level, 3) . a:msg)
-        else
-            call add(s:debug_log, s:Pad(l:stack_level, 3) . a:msg)
+            let l:prefix = s:Pad(l:elapsed, 6) .. l:prefix
         endif
+        let l:pads = [24, 10]
+        let l:msg = ''
+        for l:i in range(a:0)
+            let l:msg ..= s:Pad(a:000[l:i], get(l:pads, l:i, 0))
+        endfor
+        call add(s:debug_log, l:prefix .. l:msg)
     endif
 endfunction
 
