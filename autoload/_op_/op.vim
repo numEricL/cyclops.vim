@@ -2,8 +2,11 @@
 " internal op# interface
 "
 
+"TODO: enable chained operand support (refactor s:inputs, operand expr reduction)
+"TODO: exprwithmodifiers operand support
+"TODO: pair handling support
+"TODO: repeat support
 "TODO: use neovim virtual text instead of actual insertion during HijackInput
-"TODO: enable chained operand support
 
 let s:cpo = &cpo
 set cpo&vim
