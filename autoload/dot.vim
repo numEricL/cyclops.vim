@@ -18,15 +18,18 @@ function dot#Map(map, ...) abort range
     call s:AssertExprMap()
     call s:InitCallback(a:map, s:ExtendDefaultOpts(a:000))
     let &operatorfunc = '_op_#dot#ComputeMapCallback'
-    return 'g@' .. (mode(1) ==# 'n'? '_' : '')
+    let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
+    return l:omap_esc .. 'g@' .. (mode(0) ==# 'n'? '_' : '')
 endfunction
 
 function dot#Noremap(map, ...) abort range
+    echom 'dot#Noremap called with map: ' .. a:map
     call s:AssertExprMap()
     let l:map = s:RegisterNoremap(a:map)
     call s:InitCallback(l:map, s:ExtendDefaultOpts(a:000))
     let &operatorfunc = '_op_#dot#ComputeMapCallback'
-    return 'g@' .. (mode(1) ==# 'n'? '_' : '')
+    let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
+    return l:omap_esc .. 'g@' .. (mode(0) ==# 'n'? '_' : '')
 endfunction
 
 function dot#SetMaps(mapping_type, maps, ...) abort range
@@ -42,18 +45,18 @@ endfunction
 
 function s:InitCallback(expr, opts) abort
     let l:handle = _op_#op#InitCallback('dot', a:expr, a:opts)
-    call extend(l:handle, { 'marks': {
-                \ '.' : getpos('.'),
-                \ 'v' : getpos('v'),
-                \ "'<" : getpos("'<"),
-                \ "'>" : getpos("'>"),
-                \ "'[" : getpos("'["),
-                \ "']" : getpos("']"),
-                \ } } )
-    call extend(l:handle, { 'dot' : {
-                \ 'v_mode' : visualmode(),
-                \ 'cur_start' : getcurpos(),
-                \ } } )
+    " call extend(l:handle, { 'marks': {
+    "             \ '.' : getpos('.'),
+    "             \ 'v' : getpos('v'),
+    "             \ "'<" : getpos("'<"),
+    "             \ "'>" : getpos("'>"),
+    "             \ "'[" : getpos("'["),
+    "             \ "']" : getpos("']"),
+    "             \ } } )
+    " call extend(l:handle, { 'dot' : {
+    "             \ 'v_mode' : visualmode(),
+    "             \ 'cur_start' : getcurpos(),
+    "             \ } } )
 endfunction
 
 function s:SetMap(mapping_type, map, opts_dict) abort
