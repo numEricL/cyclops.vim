@@ -2,10 +2,8 @@
 " internal op# interface
 "
 
-"TODO: #Noremap should instead use no remap during feedkeys, then dd should work
-"as expected
-
 "TODO: use neovim virtual text instead of actual insertion during HijackInput
+"TODO: enable chained operand support
 
 let s:cpo = &cpo
 set cpo&vim
@@ -56,10 +54,10 @@ function _op_#op#InitCallback(handle_type, expr, opts) abort
 
     call extend(l:handle, { 'opts' : a:opts } )
     call extend(l:handle, { 'init' : {
-                \ 'handle_type'    : a:handle_type,
-                \ 'entry_mode' : mode(1),
-                \ 'op_type'    : mode(1)[:1] ==# 'no'? 'operand' : 'operator',
-                \ 'op'         : mode(1)[:1] ==# 'no'? v:operator .. mode(1)[2] : '',
+                \ 'handle_type' : a:handle_type,
+                \ 'entry_mode'  : mode(1),
+                \ 'op_type'     : mode(1)[:1] ==# 'no'? 'operand' : 'operator',
+                \ 'op'          : mode(1)[:1] ==# 'no'? _op_#init#RegisterNoremap(v:operator .. mode(1)[2]) : '',
                 \ } } )
     call extend(l:handle, { 'mods' : {
                 \ 'count1'   : v:count1,
@@ -70,15 +68,16 @@ function _op_#op#InitCallback(handle_type, expr, opts) abort
                 \ 'expr_reduced'        : a:expr,
                 \ 'expr_reduced_so_far' : '',
                 \ 'input_source'        : (a:opts['consumes_typeahead']? 'typeahead': 'user'),
+                \ 'op_input_id'         : -1,
                 \ })
     return l:handle
 endfunction
 
 function _op_#op#ComputeMapCallback() abort range
     let l:handle = _op_#stack#Top()
-    call s:Log('ComputeMapCallback', s:PModes(0), 'expr=' .. l:handle['expr_orig'] .. ' typeahead=' .. s:TypeaheadLog())
+    call s:Log('ComputeMapCallback', s:PModes(2), 'expr=' .. l:handle['expr_orig'] .. ' typeahead=' .. s:TypeaheadLog())
 
-    " reduces nested op# exprs and concatenates with their inputs
+    " reduces nested op# exprs and their inputs
     call s:ComputeMapOnStack(l:handle)
 
     let l:expr_with_modifiers = _op_#utils#ExprWithModifiers(l:handle)
@@ -127,7 +126,7 @@ function s:ComputeMapOnStack(handle) abort
         call s:ParentCallUpdate(a:handle)
 
         call s:Log('ComputeMapOnStack', 'EXIT', 'FEED_tx!=' .. a:handle['init']['op'] .. a:handle['expr_reduced'])
-        call feedkeys(a:handle['init']['op'] .. a:handle['expr_reduced'], 'tx!')
+        silent call feedkeys(a:handle['init']['op'] .. a:handle['expr_reduced'], 'tx!')
         call inputrestore()
     endif
 endfunction
@@ -162,7 +161,9 @@ function s:HijackInput(handle) abort
         if a:handle['input_source'] ==# 'user'
             while s:hijack['hmode'] =~# s:operator_hmode_pattern
                 let l:char = s:GetCharFromUser(a:handle)
+                call s:Log('', 'GOT CHAR=' .. l:char)
                 let s:input_stream = s:ProcessStream(s:input_stream, l:char)
+                call s:Log('', 'input_stream=' .. s:input_stream)
                 if s:hijack['hmode'] =~# '\v^no[vV]?-l$'
                     call s:Log('HijackInput no-l break', '', "feedkeys('dfa×') workaround")
                     " Problem: feedkeys('dfa×') ends in (lang) operator pending mode
@@ -181,13 +182,19 @@ function s:HijackInput(handle) abort
             endwhile
         endif
     endif
-    " call s:Log(s:Pad('HijackInput: ', 30) .. 'input_stream=' .. s:input_stream)
+    call s:Log('HijackInput', '', 'input_stream=' .. s:input_stream)
 
-    " store
+    " TODO: this needs to be generalized to allow chained operands
+    " s:input_stream is global and reset at each stack frame. Operands overwrite
+    " the input stream, so let the operand store it's parent input stream (which
+    " is expr_reduced of this frame) too.
     if a:handle['init']['op_type'] ==# 'operand'
+        call s:Log('HijackInput', 'store', 'operand=' .. a:handle['expr_reduced'])
         call add(s:inputs, a:handle['expr_reduced'])
     endif
     if !empty(s:input_stream)
+        call s:Log('HijackInput', 'store', 'input_stream=' .. s:input_stream)
+        let a:handle['op_input_id'] = len(s:inputs)
         call add(s:inputs, s:input_stream)
     endif
 
@@ -258,8 +265,7 @@ function s:ProbeExpr(expr, type) abort
         let [ &timeout, &timeoutlen ] = [ l:timeout, l:timeoutlen ]
         call _op_#utils#RestoreState(l:state)
     endtry
-    let l:msg = 'cmd=' .. s:hijack['cmd'] .. ' cmd_type=' .. s:hijack['cmd_type'] .. ' typeahead=' .. s:ReadTypeaheadTruncated()
-    call _op_#stack#Pop(l:stack_id, l:msg)
+    call _op_#stack#Pop(l:stack_id, 'typeahead=' .. s:ReadTypeaheadTruncated())
 endfunction
 
 " map the first char of s:hijack_probe to get hijack data
@@ -367,7 +373,7 @@ function s:GetCharFromUser_i(handle) abort
         " update buffer if waiting for user input
         if !getchar(1)
             call s:Log('GetCharFromUser_i', s:PModes(0), 'FEED_tx=' .. a:handle['expr_reduced'] .. s:input_stream)
-            call feedkeys(a:handle['expr_reduced'] .. s:input_stream, 'tx')
+            silent call feedkeys(a:handle['expr_reduced'] .. s:input_stream, 'tx')
             let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
             call add(l:match_ids, matchadd(l:cursor_hl, '\%'.line('.').'l\%'.(col('.')+1).'c'))
             redraw
@@ -546,7 +552,15 @@ endfunction
 function s:StoreHandle(handle) abort
     call s:Log('StoreHandle ' .. a:handle['init']['handle_type'], '', 'expr=' .. a:handle['expr_reduced'])
     let l:handle_to_store = deepcopy(a:handle)
-    call extend(l:handle_to_store, { 'inputs': s:inputs })
+
+    if a:handle['init']['op_type'] ==# 'operand'
+        " TODO: chained operand support
+        let l:input = s:inputs[a:handle['op_input_id']]
+        call extend(l:handle_to_store, { 'inputs': [ l:input ] })
+    else
+        call extend(l:handle_to_store, { 'inputs': deepcopy(s:inputs) })
+    endif
+
     call remove(l:handle_to_store, 'stack_level')
     call remove(l:handle_to_store, 'stack_id')
 
