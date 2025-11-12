@@ -44,6 +44,7 @@ function _op_#stack#Init(init_func) abort
         call _op_#log#InitDebugLog()
         call s:Push('init', 'StackInit')
     endif
+    return s:Top()
 endfunction
 
 function _op_#stack#Depth() abort

@@ -9,24 +9,6 @@ let s:Pad    = function('_op_#log#Pad')
 let s:Log    = function('_op_#log#Log')
 let s:PModes = function('_op_#log#PModes')
 
-function _op_#utils#ExprWithModifiers(handle) abort
-    let l:opts = a:handle['opts']
-    let l:mods = a:handle['mods']
-
-    let l:register = (l:opts['accepts_register'])? '"' .. l:mods['register'] : ''
-    let l:expr_with_modifiers = l:register .. a:handle['init']['op'] .. a:handle['expr_reduced']
-
-    if l:opts['accepts_count'] && l:mods['count1'] != 1
-        let l:expr_with_modifiers = l:mods['count1'].l:expr_with_modifiers
-    elseif !l:opts['accepts_count']
-        let l:expr_with_modifiers = repeat(l:expr_with_modifiers, l:mods['count1'])
-    endif
-
-    " expr_with_modifiers stored for debugging
-    let a:handle['expr_with_modifiers'] = l:expr_with_modifiers
-    return l:expr_with_modifiers
-endfunction
-
 function _op_#utils#GetState() abort
     let [ l:winid, l:win, l:last_undo ] = [ win_getid(), winsaveview(), undotree()['seq_cur'] ]
     let l:v_state = _op_#utils#GetVisualState()

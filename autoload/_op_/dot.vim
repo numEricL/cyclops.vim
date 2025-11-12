@@ -10,36 +10,14 @@ silent! call _op_#init#settings#Load()
 function _op_#dot#ComputeMapCallback(dummy) abort
     call s:RestoreEntry(_op_#stack#Top())
     call _op_#op#ComputeMapCallback()
-    let &operatorfunc = '_op_#dot#DotCallback'
+    let &operatorfunc = '_op_#dot#RepeatCallback'
 endfunction
 
-function _op_#dot#DotCallback(dummy) abort
+function _op_#dot#RepeatCallback(dummy) abort
     "TODO setup entry mode
     let l:handle = _op_#op#GetHandle('dot')
-    let l:expr = _op_#utils#ExprWithModifiers(l:handle)
+    let l:expr = _op_#op#ExprWithModifiers(l:handle)
     call feedkeys(l:expr)
-endfunction
-
-function _op_#dot#Repeat(count, register, mode) abort
-    let l:handle = _op_#op#GetHandle('dot')
-    if !empty(l:handle) && !has_key(l:handle, 'abort')
-        let l:count1 = (a:count)? a:count : l:handle['mods']['count1']
-        call extend(l:handle, { 'mods' : {
-                    \ 'count1': l:count1,
-                    \ 'register': a:register,
-                    \ } } )
-        call extend(l:handle, { 'repeat_mode' : a:mode } )
-    endif
-    execute 'normal! .'
-endfunction
-
-function _op_#dot#RepeatOpPending() abort
-    let l:handle = _op_#op#GetHandle('dot')
-    if  !empty(l:handle) && !has_key(l:handle, 'abort') && has_key(l:handle, 'inputs')
-        return join(l:handle['inputs'], '')
-    else
-        return "\<esc>"
-    endif
 endfunction
 
 function s:RestoreEntry(handle) abort

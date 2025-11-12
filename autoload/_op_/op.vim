@@ -51,32 +51,33 @@ function s:InitScriptVars()
     endif
 endfunction
 
-function _op_#op#InitCallback(handle_type, expr, opts) abort
+function _op_#op#StackInit() abort
+    return _op_#stack#Init(function('s:InitScriptVars'))
+endfunction
+
+function _op_#op#InitCallback(handle, handle_type, expr, opts) abort
     if mode(1) !~# '\v^(n|v|V||no|nov|noV|no)$'
         throw 'cyclops.vim: Entry mode '.string(mode(1)).' not yet supported.'
     endif
-    call _op_#stack#Init(function('s:InitScriptVars'))
-    let l:handle = _op_#stack#Top()
 
-    call extend(l:handle, { 'opts' : a:opts } )
-    call extend(l:handle, { 'init' : {
+    call extend(a:handle, { 'opts' : a:opts } )
+    call extend(a:handle, { 'init' : {
                 \ 'handle_type' : a:handle_type,
                 \ 'entry_mode'  : mode(1),
                 \ 'op_type'     : mode(1)[:1] ==# 'no'? 'operand' : 'operator',
                 \ 'op'          : mode(1)[:1] ==# 'no'? _op_#init#RegisterNoremap(v:operator .. mode(1)[2]) : '',
                 \ } } )
-    call extend(l:handle, { 'mods' : {
+    call extend(a:handle, { 'mods' : {
                 \ 'count1'   : v:count1,
                 \ 'register' : v:register,
                 \ } } )
-    call extend(l:handle, {
+    call extend(a:handle, {
                 \ 'expr_orig'           : a:expr,
                 \ 'expr_reduced'        : a:expr,
                 \ 'expr_reduced_so_far' : '',
                 \ 'input_source'        : (a:opts['consumes_typeahead']? 'typeahead': 'user'),
                 \ 'op_input_id'         : -1,
                 \ })
-    return l:handle
 endfunction
 
 function _op_#op#ComputeMapCallback() abort range
@@ -86,7 +87,7 @@ function _op_#op#ComputeMapCallback() abort range
     " reduces nested op# exprs and their inputs
     call s:ComputeMapOnStack(l:handle)
 
-    let l:expr_with_modifiers = _op_#utils#ExprWithModifiers(l:handle)
+    let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle, l:handle['init']['op'])
     call s:StoreHandle(l:handle)
 
     if _op_#stack#Depth() == 1
@@ -549,6 +550,27 @@ function s:StealTypeaheadTruncated() abort
     endwhile
     return l:typeahead
 endfunction
+
+function _op_#op#ExprWithModifiers(handle, ...) abort
+    let l:op = a:0? a:1 : ''
+
+    let l:opts = a:handle['opts']
+    let l:mods = a:handle['mods']
+
+    let l:register = (l:opts['accepts_register'])? '"' .. l:mods['register'] : ''
+    let l:expr_with_modifiers = l:register .. l:op .. a:handle['expr_reduced']
+
+    if l:opts['accepts_count'] && l:mods['count1'] != 1
+        let l:expr_with_modifiers = l:mods['count1'].l:expr_with_modifiers
+    elseif !l:opts['accepts_count']
+        let l:expr_with_modifiers = repeat(l:expr_with_modifiers, l:mods['count1'])
+    endif
+
+    " expr_with_modifiers stored for debugging
+    let a:handle['expr_with_modifiers'] = l:expr_with_modifiers
+    return l:expr_with_modifiers
+endfunction
+
 
 function s:StoreHandle(handle) abort
     call s:Log('StoreHandle ' .. a:handle['init']['handle_type'], '', 'expr=' .. a:handle['expr_reduced'])
