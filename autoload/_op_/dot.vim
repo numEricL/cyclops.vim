@@ -68,8 +68,9 @@ function s:RestoreRepeatEntry(handle) abort
     let l:imode = a:handle['dot']['mode']
     let l:rmode = a:handle['repeat']['mode']
 
+    " if initiated in operator-pending mode then treat like normal mode
     let l:init_repeat = v:false
-    if l:imode ==# 'n' && l:rmode ==# 'n'
+    if l:imode[0] ==# 'n' && l:rmode ==# 'n'
         call setpos('.', a:handle['repeat']['curpos'])
         let l:init_repeat = v:true
     elseif l:imode =~# '\v^[vV]$' && l:rmode ==# 'n'
