@@ -87,7 +87,7 @@ function _op_#op#ComputeMapCallback() abort range
     " reduces nested op# exprs and their inputs
     call s:ComputeMapOnStack(l:handle)
 
-    let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle, l:handle['init']['op'])
+    let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle, l:handle['mods'], l:handle['init']['op'])
     call s:StoreHandle(l:handle)
 
     if _op_#stack#Depth() == 1
@@ -551,11 +551,11 @@ function s:StealTypeaheadTruncated() abort
     return l:typeahead
 endfunction
 
-function _op_#op#ExprWithModifiers(handle, ...) abort
+function _op_#op#ExprWithModifiers(handle, modifiers, ...) abort
     let l:op = a:0? a:1 : ''
 
     let l:opts = a:handle['opts']
-    let l:mods = a:handle['mods']
+    let l:mods = a:modifiers
 
     let l:register = (l:opts['accepts_register'])? '"' .. l:mods['register'] : ''
     let l:expr_with_modifiers = l:register .. l:op .. a:handle['expr_reduced']

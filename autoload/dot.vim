@@ -18,7 +18,7 @@ function dot#Map(map, ...) abort range
     call s:AssertExprMap()
     let l:handle = _op_#op#StackInit()
     call _op_#op#InitCallback(l:handle, 'dot', a:map, s:ExtendDefaultOpts(a:000))
-    call _op_#dot#InitDotCallback(l:handle)
+    call _op_#dot#InitCallback(l:handle)
     let &operatorfunc = '_op_#dot#ComputeMapCallback'
     let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
     return l:omap_esc .. 'g@' .. (mode(0) ==# 'n'? '_' : '')
@@ -29,7 +29,7 @@ function dot#Noremap(map, ...) abort range
     let l:map = s:RegisterNoremap(a:map)
     let l:handle = _op_#op#StackInit()
     call _op_#op#InitCallback(l:handle, 'dot', l:map, s:ExtendDefaultOpts(a:000))
-    call _op_#dot#InitDotCallback(l:handle)
+    call _op_#dot#InitCallback(l:handle)
     let &operatorfunc = '_op_#dot#ComputeMapCallback'
     let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
     return l:omap_esc .. 'g@' .. (mode(0) ==# 'n'? '_' : '')
@@ -49,18 +49,18 @@ endfunction
 function dot#RepeatMap() abort
     call s:AssertExprMap()
     let l:handle = _op_#op#GetStoredHandle('dot')
-    call extend(l:handle, { 'repeat' : {
-                \ 'mode'     : mode(0),
-                \ 'curpos'   : getcurpos(),
-                \ 'count'    : v:count,
-                \ 'register' : v:register,
-                \ } } )
-    if mode(0) ==# 'n'
+
+    " do nothing
+    if l:handle['init']['mode'] ==# 'n' && mode(0) =~# '\v^[vV]$'
+        return ''
+    endif
+    call _op_#dot#InitRepeatCallback(l:handle)
+    if mode(1) ==# 'n'
         return '.'
     elseif mode(0) =~# '\v^[vV]$'
         return "\<esc>."
     else
-        throw 'unimplemented'
+        throw 'unimplemented mode: ' . mode(1)
     endif
 endfunction
 

@@ -7,15 +7,10 @@ set cpo&vim
 
 silent! call _op_#init#settings#Load()
 
-function _op_#dot#InitDotCallback(handle) abort
-    if empty(a:handle) || has_key(a:handle, 'abort')
-        return
-    endif
+function _op_#dot#InitCallback(handle) abort
     call extend(a:handle, { 'dot' : {
                 \ 'mode'     : mode(1),
                 \ 'curpos'   : getcurpos(),
-                \ 'count'    : v:count,
-                \ 'register' : v:register,
                 \ } } )
     call extend(a:handle, { 'marks': {
                 \ '.'  : getpos('.'),
@@ -46,6 +41,17 @@ function s:RestoreEntry(handle) abort
     endif
 endfunction
 
+function _op_#dot#InitRepeatCallback(handle) abort
+    call extend(a:handle, { 'repeat' : {
+                \ 'mode'     : mode(1),
+                \ 'curpos'   : getcurpos(),
+                \ } } )
+    call extend(a:handle, { 'repeat_mods': {
+                \ 'count1'    : v:count1,
+                \ 'register' : v:register,
+                \ } } )
+endfunction
+
 function _op_#dot#RepeatCallback(dummy) abort
     "TODO setup entry mode
     let l:handle = _op_#op#GetStoredHandle('dot')
@@ -54,7 +60,7 @@ function _op_#dot#RepeatCallback(dummy) abort
     endif
 
     call s:RestoreRepeatEntry(l:handle)
-    let l:expr = _op_#op#ExprWithModifiers(l:handle)
+    let l:expr = _op_#op#ExprWithModifiers(l:handle, l:handle['repeat_mods'])
     call feedkeys(l:expr)
 endfunction
 
@@ -92,12 +98,10 @@ endfunction
 function s:ShiftPos(point, v_beg, v_end) abort
     let l:shifted_row = a:point[1] + ( a:v_end[1] - a:v_beg[1] )
     let l:shifted_col = s:VirtCol(a:point) + ( s:VirtCol(a:v_end) - s:VirtCol(a:v_beg) )
-    echom 'SHIFTED' .. "   " .. string(a:point[1:2]) .. " -> " .. string(s:GetPos(l:shifted_row, l:shifted_col)[1:2])
     return s:GetPos(l:shifted_row, l:shifted_col)
 endfunction
 
 function s:VirtCol(pos) abort
-    " echom 'VIRTCOL' .. "   " .. string(a:pos[1:3]) .. " -> " .. virtcol(a:pos[1:3])
     return virtcol(a:pos[1:3])
 endfunction
 
