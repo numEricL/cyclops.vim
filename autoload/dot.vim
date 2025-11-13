@@ -17,7 +17,8 @@ let s:RegisterNoremap   = function('_op_#init#RegisterNoremap')
 function dot#Map(map, ...) abort range
     call s:AssertExprMap()
     let l:handle = _op_#op#StackInit()
-    call s:InitCallback(l:handle, a:map, s:ExtendDefaultOpts(a:000))
+    call _op_#op#InitCallback(l:handle, 'dot', a:map, s:ExtendDefaultOpts(a:000))
+    call _op_#dot#InitDotCallback(l:handle)
     let &operatorfunc = '_op_#dot#ComputeMapCallback'
     let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
     return l:omap_esc .. 'g@' .. (mode(0) ==# 'n'? '_' : '')
@@ -25,9 +26,10 @@ endfunction
 
 function dot#Noremap(map, ...) abort range
     call s:AssertExprMap()
-    let l:handle = _op_#op#StackInit()
     let l:map = s:RegisterNoremap(a:map)
-    call s:InitCallback(l:handle, l:map, s:ExtendDefaultOpts(a:000))
+    let l:handle = _op_#op#StackInit()
+    call _op_#op#InitCallback(l:handle, 'dot', l:map, s:ExtendDefaultOpts(a:000))
+    call _op_#dot#InitDotCallback(l:handle)
     let &operatorfunc = '_op_#dot#ComputeMapCallback'
     let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
     return l:omap_esc .. 'g@' .. (mode(0) ==# 'n'? '_' : '')
@@ -45,33 +47,31 @@ function dot#SetMaps(mapping_type, maps, ...) abort range
 endfunction
 
 function dot#RepeatMap() abort
-    let l:handle = _op_#op#GetHandle('dot')
-    if !empty(l:handle) && !has_key(l:handle, 'abort')
-        let l:count1 = (v:count)? v:count : l:handle['mods']['count1']
-        call extend(l:handle, { 'mods' : {
-                    \ 'count1': l:count1,
-                    \ 'register': v:register,
-                    \ } } )
-        call extend(l:handle, { 'repeat_mode' : mode(1) } )
+    call s:AssertExprMap()
+    let l:handle = _op_#op#GetStoredHandle('dot')
+    call extend(l:handle, { 'repeat' : {
+                \ 'mode'     : mode(0),
+                \ 'curpos'   : getcurpos(),
+                \ 'count'    : v:count,
+                \ 'register' : v:register,
+                \ } } )
+    if mode(0) ==# 'n'
+        return '.'
+    elseif mode(0) =~# '\v^[vV]$'
+        return "\<esc>."
+    else
+        throw 'unimplemented'
     endif
-    return '.'
 endfunction
 
-function s:InitCallback(handle, expr, opts) abort
-    call _op_#op#InitCallback(a:handle, 'dot', a:expr, a:opts)
-    " call extend(l:handle, { 'marks': {
-    "             \ '.' : getpos('.'),
-    "             \ 'v' : getpos('v'),
-    "             \ "'<" : getpos("'<"),
-    "             \ "'>" : getpos("'>"),
-    "             \ "'[" : getpos("'["),
-    "             \ "']" : getpos("']"),
-    "             \ } } )
-    call extend(a:handle, { 'dot' : {
-                \ 'cur_start' : getcurpos(),
-                \ } } )
-                " \ 'v_mode' : visualmode(),
-endfunction
+" function _op_#dot#RepeatOpPending() abort
+"     let l:handle = _op_#op#GetStoredHandle('dot')
+"     if  !empty(l:handle) && !has_key(l:handle, 'abort') && has_key(l:handle, 'inputs')
+"         return join(l:handle['inputs'], '')
+"     else
+"         return "\<esc>"
+"     endif
+" endfunction
 
 function s:SetMap(mapping_type, map, opts_dict) abort
     let l:noremap = (a:mapping_type =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)')
@@ -84,16 +84,6 @@ function s:SetMap(mapping_type, map, opts_dict) abort
     endif
     execute a:mapping_type .. ' <expr> ' .. a:map .. ' dot#Map(' .. string(maparg(a:map, l:modes[0])) .. ', ' .. string(a:opts_dict) .. ')'
 endfunction
-
-" function _op_#dot#RepeatOpPending() abort
-"     let l:handle = _op_#op#GetHandle('dot')
-"     if  !empty(l:handle) && !has_key(l:handle, 'abort') && has_key(l:handle, 'inputs')
-"         return join(l:handle['inputs'], '')
-"     else
-"         return "\<esc>"
-"     endif
-" endfunction
-
 
 let &cpo = s:cpo
 unlet s:cpo

@@ -22,8 +22,8 @@ endfunction
 
 function op#Noremap(map, ...) abort range
     call s:AssertExprMap()
-    let l:handle = _op_#op#StackInit()
     let l:map = s:RegisterNoremap(a:map)
+    let l:handle = _op_#op#StackInit()
     call s:InitCallback(l:handle, 'op', l:map, s:ExtendDefaultOpts(a:000))
     let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
     return l:omap_esc .. "\<cmd>call _op_#op#ComputeMapCallback()\<cr>"

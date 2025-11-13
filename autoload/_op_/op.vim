@@ -36,7 +36,7 @@ function _op_#op#GetHandles() abort
     return s:handles
 endfunction
 
-function _op_#op#GetHandle(handle_type) abort
+function _op_#op#GetStoredHandle(handle_type) abort
     return _op_#op#GetHandles()[a:handle_type]
 endfunction
 
@@ -63,7 +63,7 @@ function _op_#op#InitCallback(handle, handle_type, expr, opts) abort
     call extend(a:handle, { 'opts' : a:opts } )
     call extend(a:handle, { 'init' : {
                 \ 'handle_type' : a:handle_type,
-                \ 'entry_mode'  : mode(1),
+                \ 'mode'        : mode(1),
                 \ 'op_type'     : mode(1)[:1] ==# 'no'? 'operand' : 'operator',
                 \ 'op'          : mode(1)[:1] ==# 'no'? _op_#init#RegisterNoremap(v:operator .. mode(1)[2]) : '',
                 \ } } )
@@ -312,13 +312,13 @@ function s:ParentCallInit(handle) abort
 
     " in case [current map call] == xxxOP1, remove xxx
     let l:parent_call = l:calling_expr
-    if a:handle['init']['entry_mode'] ==# 'n'
+    if a:handle['init']['mode'] ==# 'n'
         let l:mode = 'n'
-    elseif a:handle['init']['entry_mode'] =~# '\v^[vV]$'
+    elseif a:handle['init']['mode'] =~# '\v^[vV]$'
         let l:mode = 'x'
-    elseif a:handle['init']['entry_mode'] =~# '\v^[sS]$'
+    elseif a:handle['init']['mode'] =~# '\v^[sS]$'
         let l:mode = 's'
-    elseif a:handle['init']['entry_mode'] =~# '\v^no.?$'
+    elseif a:handle['init']['mode'] =~# '\v^no.?$'
         let l:mode = 'o'
     endif
     let l:count = 0
@@ -397,8 +397,8 @@ function s:GetCharFromUser_no(handle) abort
 
         " set highlights
         let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
-        if a:handle['init']['entry_mode'] =~# '\v^[vV]$'
-            if a:handle['init']['entry_mode'] =~# '\v^[vV]$'
+        if a:handle['init']['mode'] =~# '\v^[vV]$'
+            if a:handle['init']['mode'] =~# '\v^[vV]$'
                 call add(l:match_ids, matchadd('Visual', '\m\%>'."'".'<\&\%<'."'".'>\&[^$]'))
                 call add(l:match_ids, matchadd('Visual', '\m\%'."'".'<\|\%'."'".'>'))
             else
@@ -591,25 +591,6 @@ function s:StoreHandle(handle) abort
     let s:handles[l:name] = l:handle_to_store
 endfunction
 
-function s:ShiftToCursor(cur_start, cur_end) abort
-    let l:cur_pos = getcurpos()
-    let l:shifted_lnr = l:cur_pos[1] + ( a:cur_end[1] - a:cur_start[1] )
-    let l:shifted_col = s:GetScreenCol(l:cur_pos) + ( s:GetScreenCol(a:cur_end) - s:GetScreenCol(a:cur_start) )
-    let l:shifted_pos = s:GetScreenPos(l:shifted_lnr, l:shifted_col)
-    call setpos('.', l:cur_pos)
-    return [ l:cur_pos, l:shifted_pos ]
-endfunction
-
-function s:GetScreenPos(linenr, col) abort
-    let l:col = max([1, a:col])
-    silent! execute 'normal! '.a:linenr.'G'.l:col.'|'
-    return getpos('.')
-endfunction
-
-function s:GetScreenCol(pos) abort
-    return virtcol(a:pos[1:3]) ? virtcol(a:pos[1:3]) : a:pos[2]
-endfunction
-
 function _op_#op#Throw(...)
     let l:msg = a:0? a:1 : v:exception
     try
@@ -633,10 +614,6 @@ endfunction
 "     silent! execute "normal! \<esc>"
 "     let s:default_register = v:register
 " endfunction
-
-function op#SID() abort
-    return expand('<SID>')
-endfunction
 
 noremap <plug>(op#_noremap_f) f
 noremap <plug>(op#_noremap_F) F
@@ -685,12 +662,12 @@ unlet s:cpo
 "     let l:mode = a:handle['repeat_mode']
 "
 "     if l:mode ==# 'normal'
-"         call extend(a:handle, { 'entry_mode': 'n', 'cur_start': getcurpos()})
+"         call extend(a:handle, { 'mode': 'n', 'cur_start': getcurpos()})
 "     elseif l:mode ==# 'visual'
 "         let l:selectmode = &selectmode | set selectmode=
 "         silent! execute "normal! \<esc>gv"
 "         let &selectmode = l:selectmode
-"         call extend(a:handle, { 'entry_mode': mode(1), 'cur_start': getcurpos()})
+"         call extend(a:handle, { 'mode': mode(1), 'cur_start': getcurpos()})
 "     endif
 "     let a:handle['count1'] = (l:count || !has_key(a:handle, 'count1'))? max([1,l:count]) : a:handle['count1']
 "     let a:handle['register'] = l:register
