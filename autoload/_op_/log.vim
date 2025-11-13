@@ -26,6 +26,11 @@ function _op_#log#PrintScriptVars() abort range
             call s:PrintDict(l:handle, '['.l:handle_type.']')
         endif
     endfor
+    if !empty(_op_#stack#GetException())
+        echomsg ' '
+        echomsg 'stack exception: ' . _op_#stack#GetException()
+        echomsg _op_#stack#GetThrowpoint()
+    endif
     echomsg ' '
 endfunction
 

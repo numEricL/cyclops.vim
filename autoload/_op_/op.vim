@@ -3,9 +3,7 @@
 "
 
 "TODO: enable chained operand support (refactor s:inputs, operand expr reduction)
-"TODO: exprwithmodifiers operand support
-"TODO: pair handling support
-"TODO: repeat support
+"TODO: silent on repeat
 "TODO: use neovim virtual text instead of actual insertion during HijackInput
 
 let s:cpo = &cpo
@@ -60,7 +58,6 @@ function _op_#op#InitCallback(handle, handle_type, expr, opts) abort
         throw 'cyclops.vim: Entry mode '.string(mode(1)).' not yet supported.'
     endif
 
-    call extend(a:handle, { 'opts' : a:opts } )
     call extend(a:handle, { 'init' : {
                 \ 'handle_type' : a:handle_type,
                 \ 'mode'        : mode(1),
@@ -71,6 +68,7 @@ function _op_#op#InitCallback(handle, handle_type, expr, opts) abort
                 \ 'count1'   : v:count1,
                 \ 'register' : v:register,
                 \ } } )
+    call extend(a:handle, { 'opts' : a:opts } )
     call extend(a:handle, { 'expr' : {
                 \ 'orig'           : a:expr,
                 \ 'reduced'        : a:expr,
@@ -78,19 +76,28 @@ function _op_#op#InitCallback(handle, handle_type, expr, opts) abort
                 \ 'input_source'   : (a:opts['consumes_typeahead']? 'typeahead': 'user'),
                 \ 'op_input_id'    : -1,
                 \ } } )
+    " ['expr]['input_source'] may be set to 'cache' by pair repeat handling
 endfunction
 
 function _op_#op#ComputeMapCallback() abort range
     let l:handle = _op_#stack#Top()
     call s:Log('ComputeMapCallback', s:PModes(2), 'expr=' .. l:handle['expr']['orig'] .. ' typeahead=' .. s:TypeaheadLog())
 
-    " reduces nested op# exprs and their inputs
-    call s:ComputeMapOnStack(l:handle)
+    if _op_#stack#Depth() == 1
+        try
+            call s:ComputeMapOnStack(l:handle)
+        catch /op#abort/
+            echohl ErrorMsg | echomsg _op_#stack#GetException() | echohl None
+            return
+        endtry
+    else
+        call s:ComputeMapOnStack(l:handle)
+    endif
 
-    let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle, l:handle['mods'], l:handle['init']['op'])
     call s:StoreHandle(l:handle)
 
     if _op_#stack#Depth() == 1
+        let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:handle['mods'], l:handle['opts'], l:handle['init']['op'])
         call s:Log('EXIT', s:PModes(0), 'FEED_tx!=' .. l:expr_with_modifiers .. s:ambiguous_map_chars)
         if l:handle['opts']['silent']
             silent call feedkeys(l:expr_with_modifiers .. s:ambiguous_map_chars, 'tx!')
@@ -111,18 +118,13 @@ function s:ComputeMapOnStack(handle) abort
             call s:Log('ComputeMapOnStack', '', 'ambiguous map chars=' .. s:ambiguous_map_chars)
         endif
 
-        try
-            " recursion typically happens at this ProbeExpr call, but can also
-            " happen in HijackInput if a registered omap is triggered
+        " recursion typically happens at this ProbeExpr call, but can also
+        " happen in HijackInput if a registered omap is triggered
 
-            call s:ProbeExpr(a:handle['init']['op'] .. a:handle['expr']['orig'], 'expr_orig')
-            let l:input = s:HijackInput(a:handle)
-            call s:CheckForProbeErrors()
-            let a:handle['expr']['reduced'] ..= l:input
-        catch /op#abort/
-            echohl ErrorMsg | echomsg _op_#stack#GetException() | echohl None
-            call interrupt()
-        endtry
+        call s:ProbeExpr(a:handle['init']['op'] .. a:handle['expr']['orig'], 'expr_orig')
+        let l:input = s:HijackInput(a:handle)
+        call s:CheckForProbeErrors()
+        let a:handle['expr']['reduced'] ..= l:input
     else
         call s:ParentCallInit(a:handle)
         call inputsave()
@@ -146,8 +148,9 @@ function s:HijackInput(handle) abort
         return ''
     endif
 
-    if a:handle['expr']['input_source'] ==# 'input_cache'
-        let s:input_stream = remove(a:handle['input_cache'], 0)
+    if a:handle['expr']['input_source'] ==# 'cache'
+        let s:input_stream = remove(a:handle['expr']['inputs'], 0)
+        call s:Log('HijackInput', '', 'cached input=' .. s:input_stream)
         return s:input_stream
     endif
 
@@ -551,30 +554,28 @@ function s:StealTypeaheadTruncated() abort
     return l:typeahead
 endfunction
 
-function _op_#op#ExprWithModifiers(handle, modifiers, ...) abort
+function _op_#op#ExprWithModifiers(expr, mods, opts, ...) abort
     let l:op = a:0? a:1 : ''
 
-    let l:opts = a:handle['opts']
-    let l:mods = a:modifiers
+    let l:register = (a:opts['accepts_register'])? '"' .. a:mods['register'] : ''
+    let l:expr_with_modifiers = l:register .. l:op .. a:expr
 
-    let l:register = (l:opts['accepts_register'])? '"' .. l:mods['register'] : ''
-    let l:expr_with_modifiers = l:register .. l:op .. a:handle['expr']['reduced']
-
-    if l:opts['accepts_count'] && l:mods['count1'] != 1
-        let l:expr_with_modifiers = l:mods['count1'].l:expr_with_modifiers
-    elseif !l:opts['accepts_count']
-        let l:expr_with_modifiers = repeat(l:expr_with_modifiers, l:mods['count1'])
+    if a:opts['accepts_count'] && a:mods['count1'] != 1
+        let l:expr_with_modifiers = a:mods['count1'].l:expr_with_modifiers
+    elseif !a:opts['accepts_count']
+        let l:expr_with_modifiers = repeat(l:expr_with_modifiers, a:mods['count1'])
     endif
 
-    " expr_with_modifiers stored for debugging
-    let a:handle['expr']['with_modifiers'] = l:expr_with_modifiers
     return l:expr_with_modifiers
 endfunction
-
 
 function s:StoreHandle(handle) abort
     call s:Log('StoreHandle ' .. a:handle['init']['handle_type'], '', 'expr=' .. a:handle['expr']['reduced'])
     let l:handle_to_store = deepcopy(a:handle)
+
+    " expr with modifiers stored for debugging
+    let l:expr = a:handle['expr']['reduced']
+    let l:handle_to_store['expr']['with_modifiers'] = _op_#op#ExprWithModifiers(l:expr, a:handle['mods'], a:handle['opts'], a:handle['init']['op'])
 
     if a:handle['init']['op_type'] ==# 'operand'
         " TODO: chained operand support
@@ -590,28 +591,23 @@ function s:StoreHandle(handle) abort
 endfunction
 
 function _op_#op#Throw(...)
-    let l:msg = a:0? a:1 : v:exception
+    let l:exception = a:0? a:1 : v:exception
     try
         throw 'op#abort'
     catch /op#abort/
-        call _op_#stack#SetException(l:msg)
+        call _op_#stack#SetException(l:exception, v:throwpoint)
 
         call s:Log('')
-        call s:Log('EXCEPTION: ' .. l:msg)
+        call s:Log('EXCEPTION: ' .. l:exception)
         call s:Log(v:throwpoint)
         throw 'op#abort'
     endtry
 endfunction
 
-" use for logging only
+" only used for logging
 function _op_#op#GetLastHijackMode() abort
     return s:hijack['hmode']
 endfunction
-
-" function s:SetDefaultRegister() abort
-"     silent! execute "normal! \<esc>"
-"     let s:default_register = v:register
-" endfunction
 
 noremap <plug>(op#_noremap_f) f
 noremap <plug>(op#_noremap_F) F
@@ -632,55 +628,5 @@ function s:Workaround_f(char)
     return a:char
 endfunction
 
-" noremap <plug>(op#_noremap_f) f
-" noremap <plug>(op#_noremap_F) F
-" noremap <plug>(op#_noremap_t) t
-" noremap <plug>(op#_noremap_T) T
-"    omap <plug>(op#_noremap_f) <plug>(op#_workaround_f)
-"    omap <plug>(op#_noremap_F) <plug>(op#_workaround_F)
-"    omap <plug>(op#_noremap_t) <plug>(op#_workaround_t)
-"    omap <plug>(op#_noremap_T) <plug>(op#_workaround_T)
-" onoremap <expr> <plug>(op#_workaround_f) <sid>Workaround_f('f')
-" onoremap <expr> <plug>(op#_workaround_F) <sid>Workaround_f('F')
-" onoremap <expr> <plug>(op#_workaround_t) <sid>Workaround_f('t')
-" onoremap <expr> <plug>(op#_workaround_T) <sid>Workaround_f('T')
-"
-" let s:workaround_f = 0
-" function s:Workaround_f(char)
-"     let s:workaround_f = 1
-"     return a:char
-" endfunction
-
 let &cpo = s:cpo
 unlet s:cpo
-
-" function s:PrepareRepeat(handle) abort
-"     let l:count = a:handle['repeat_count']
-"     let l:register = a:handle['repeat_register']
-"     let l:mode = a:handle['repeat_mode']
-"
-"     if l:mode ==# 'normal'
-"         call extend(a:handle, { 'mode': 'n', 'cur_start': getcurpos()})
-"     elseif l:mode ==# 'visual'
-"         let l:selectmode = &selectmode | set selectmode=
-"         silent! execute "normal! \<esc>gv"
-"         let &selectmode = l:selectmode
-"         call extend(a:handle, { 'mode': mode(1), 'cur_start': getcurpos()})
-"     endif
-"     let a:handle['count1'] = (l:count || !has_key(a:handle, 'count1'))? max([1,l:count]) : a:handle['count1']
-"     let a:handle['register'] = l:register
-"     if get(a:handle['opts'], 'shift_marks')
-"         if l:mode ==# 'normal'
-"             let [ a:handle['v_start'], a:handle['v_end'] ] = s:ShiftToCursor(a:handle['v_start'], a:handle['v_end'])
-"             call setpos('.', a:handle['v_start'])
-"             let l:selectmode = &selectmode | set selectmode=
-"             silent! execute "normal! ".a:handle['v_mode']
-"             let &selectmode = l:selectmode
-"             call setpos('.', a:handle['v_end'])
-"             silent! execute "normal! \<esc>"
-"         endif
-"         let [ l:shifted_start, l:shifted_end ] = s:ShiftToCursor(getpos("'["), getpos("']"))
-"         call setpos("'[", l:shifted_start)
-"         call setpos("']", l:shifted_end)
-"     endif
-" endfunction

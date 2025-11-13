@@ -6,6 +6,7 @@ silent! call _op_#init#settings#Load()
 let s:stack_debug = 0
 let s:stack = []
 let s:exception = ''
+let s:throwpoint = ''
 let s:stack_id = -1
 
 if s:stack_debug
@@ -82,8 +83,13 @@ function _op_#stack#GetException() abort
     return s:exception
 endfunction
 
-function _op_#stack#SetException(msg) abort
-    let s:exception = a:msg
+function _op_#stack#GetThrowpoint() abort
+    return s:throwpoint
+endfunction
+
+function _op_#stack#SetException(exception, throwpoint) abort
+    let s:exception = a:exception
+    let s:throwpoint = a:throwpoint
 endfunction
 
 let &cpo = s:cpo

@@ -33,34 +33,6 @@ function dot#Noremap(map, ...) abort range
     return l:omap_esc .. 'g@' .. (mode(0) ==# 'n'? '_' : '')
 endfunction
 
-function dot#RepeatMap() abort
-    call s:AssertExprMap()
-    let l:handle = _op_#op#GetStoredHandle('dot')
-
-    " do nothing
-    if mode(0) =~# '\v^[vV]$' && l:handle['init']['mode'] ==# 'n'
-        return ''
-    endif
-
-    call _op_#dot#InitRepeatCallback(l:handle)
-    if mode(1) ==# 'n'
-        return '.'
-    elseif mode(0) =~# '\v^[vV]$'
-        return "\<esc>."
-    else
-        throw 'unimplemented mode: ' . mode(1)
-    endif
-endfunction
-
-" function _op_#dot#RepeatOpPending() abort
-"     let l:handle = _op_#op#GetStoredHandle('dot')
-"     if  !empty(l:handle) && !has_key(l:handle, 'abort') && has_key(l:handle, 'inputs')
-"         return join(l:handle['inputs'], '')
-"     else
-"         return "\<esc>"
-"     endif
-" endfunction
-
 function dot#SetMaps(mapping_type, maps, ...) abort range
     let l:opts_dict = a:0 ? a:1 : {}
     if type(a:maps) == v:t_list

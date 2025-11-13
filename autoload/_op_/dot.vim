@@ -26,9 +26,15 @@ function _op_#dot#InitCallback(handle) abort
 endfunction
 
 function _op_#dot#ComputeMapCallback(dummy) abort
-    call s:RestoreEntry(_op_#stack#Top())
+    let l:handle = _op_#stack#Top()
+    call s:RestoreEntry(l:handle)
     call _op_#op#ComputeMapCallback()
-    let &operatorfunc = '_op_#dot#RepeatCallback'
+    if empty(_op_#stack#GetException())
+        let &operatorfunc = '_op_#dot#RepeatCallback'
+    else
+        " last change is clobbered, even on fail
+        let &operatorfunc = '_op_#dot#ExceptionCallback'
+    endif
 endfunction
 
 function s:RestoreEntry(handle) abort
@@ -40,6 +46,39 @@ function s:RestoreEntry(handle) abort
         let &selectmode = l:selectmode
     endif
 endfunction
+
+function _op_#dot#ExceptionCallback(dummy) abort
+    echohl ErrorMsg | echomsg 'last dot operation failed' | echohl None
+endfunction
+
+function _op_#dot#RepeatMap() abort
+    call _op_#init#AssertExprMap()
+    let l:handle = _op_#op#GetStoredHandle('dot')
+
+    " do nothing
+    if empty(l:handle) || (mode(0) =~# '\v^[vV]$' && l:handle['init']['mode'] ==# 'n')
+        return ''
+    endif
+
+    call _op_#dot#InitRepeatCallback(l:handle)
+    if mode(1) ==# 'n'
+        return '.'
+    elseif mode(0) =~# '\v^[vV]$'
+        return "\<esc>."
+    else
+        throw 'unimplemented mode: ' . mode(1)
+    endif
+endfunction
+
+" function _op_#dot#RepeatOpPending() abort
+"     let l:handle = _op_#op#GetStoredHandle('dot')
+"     if  !empty(l:handle) && !has_key(l:handle, 'abort') && has_key(l:handle, 'inputs')
+"         return join(l:handle['inputs'], '')
+"     else
+"         return "\<esc>"
+"     endif
+" endfunction
+
 
 function _op_#dot#InitRepeatCallback(handle) abort
     call extend(a:handle, { 'repeat' : {
@@ -53,15 +92,10 @@ function _op_#dot#InitRepeatCallback(handle) abort
 endfunction
 
 function _op_#dot#RepeatCallback(dummy) abort
-    "TODO setup entry mode
     let l:handle = _op_#op#GetStoredHandle('dot')
-    if empty(l:handle) || has_key(l:handle, 'abort')
-        return
-    endif
-
     call s:RestoreRepeatEntry(l:handle)
-    let l:expr = _op_#op#ExprWithModifiers(l:handle, l:handle['repeat_mods'])
-    call feedkeys(l:expr)
+    let l:expr = l:handle['expr']['reduced']
+    call feedkeys(_op_#op#ExprWithModifiers(l:expr, l:handle['repeat_mods'], l:handle['opts']))
 endfunction
 
 function s:RestoreRepeatEntry(handle) abort
