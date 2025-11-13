@@ -53,7 +53,10 @@ endfunction
 
 function _op_#stack#Push(type, msg) abort
     let s:stack_id += 1
-    let l:frame = {'stack_level': s:Depth(), 'stack_id': s:stack_id}
+    let l:frame = { 'stack' : {
+                \ 'level': s:Depth(),
+                \ 'id': s:stack_id,
+                \ } }
     call add(s:stack, l:frame)
     if s:stack_debug
         call add(s:debug_stack, l:frame)

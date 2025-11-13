@@ -14,7 +14,7 @@ function _op_#log#PrintScriptVars() abort range
         echomsg 'g:'.l:line
     endfor
     for l:handle in _op_#stack#GetStack()
-        if len(l:handle) == 1 && has_key(l:handle, 'stack_level')
+        if len(l:handle) == 1 && has_key(l:handle, 'stack')
             continue
         endif
         echomsg ' '
@@ -84,7 +84,7 @@ function _op_#log#InitDebugLog() abort
 endfunction
 
 function s:PrintDict(dict, prefix) abort
-    let l:stack_prefix = has_key(a:dict, 'stack_level') ? '[stack' . a:dict['stack_level'] . ']' : ''
+    let l:stack_prefix = has_key(a:dict, 'stack') ? '[stack' . a:dict['stack']['level'] . ']' : ''
     let l:prefix = l:stack_prefix .. a:prefix
     for l:key in a:dict->keys()->sort()
         if type(a:dict[l:key]) == v:t_dict

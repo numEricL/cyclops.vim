@@ -2,8 +2,6 @@
 " external dot# interface
 "
 
-" TODO: create dot specific callback that sets visual mode and then calls op callback
-
 let s:cpo = &cpo
 set cpo&vim
 
@@ -35,25 +33,15 @@ function dot#Noremap(map, ...) abort range
     return l:omap_esc .. 'g@' .. (mode(0) ==# 'n'? '_' : '')
 endfunction
 
-function dot#SetMaps(mapping_type, maps, ...) abort range
-    let l:opts_dict = a:0 ? a:1 : {}
-    if type(a:maps) == v:t_list
-        for l:map in a:maps
-            call s:SetMap(a:mapping_type, l:map, l:opts_dict)
-        endfor
-    else
-        call s:SetMap(a:mapping_type, a:maps, l:opts_dict)
-    endif
-endfunction
-
 function dot#RepeatMap() abort
     call s:AssertExprMap()
     let l:handle = _op_#op#GetStoredHandle('dot')
 
     " do nothing
-    if l:handle['init']['mode'] ==# 'n' && mode(0) =~# '\v^[vV]$'
+    if mode(0) =~# '\v^[vV]$' && l:handle['init']['mode'] ==# 'n'
         return ''
     endif
+
     call _op_#dot#InitRepeatCallback(l:handle)
     if mode(1) ==# 'n'
         return '.'
@@ -72,6 +60,17 @@ endfunction
 "         return "\<esc>"
 "     endif
 " endfunction
+
+function dot#SetMaps(mapping_type, maps, ...) abort range
+    let l:opts_dict = a:0 ? a:1 : {}
+    if type(a:maps) == v:t_list
+        for l:map in a:maps
+            call s:SetMap(a:mapping_type, l:map, l:opts_dict)
+        endfor
+    else
+        call s:SetMap(a:mapping_type, a:maps, l:opts_dict)
+    endif
+endfunction
 
 function s:SetMap(mapping_type, map, opts_dict) abort
     let l:noremap = (a:mapping_type =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)')

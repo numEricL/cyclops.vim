@@ -71,18 +71,18 @@ function _op_#op#InitCallback(handle, handle_type, expr, opts) abort
                 \ 'count1'   : v:count1,
                 \ 'register' : v:register,
                 \ } } )
-    call extend(a:handle, {
-                \ 'expr_orig'           : a:expr,
-                \ 'expr_reduced'        : a:expr,
-                \ 'expr_reduced_so_far' : '',
-                \ 'input_source'        : (a:opts['consumes_typeahead']? 'typeahead': 'user'),
-                \ 'op_input_id'         : -1,
-                \ })
+    call extend(a:handle, { 'expr' : {
+                \ 'orig'           : a:expr,
+                \ 'reduced'        : a:expr,
+                \ 'reduced_so_far' : '',
+                \ 'input_source'   : (a:opts['consumes_typeahead']? 'typeahead': 'user'),
+                \ 'op_input_id'    : -1,
+                \ } } )
 endfunction
 
 function _op_#op#ComputeMapCallback() abort range
     let l:handle = _op_#stack#Top()
-    call s:Log('ComputeMapCallback', s:PModes(2), 'expr=' .. l:handle['expr_orig'] .. ' typeahead=' .. s:TypeaheadLog())
+    call s:Log('ComputeMapCallback', s:PModes(2), 'expr=' .. l:handle['expr']['orig'] .. ' typeahead=' .. s:TypeaheadLog())
 
     " reduces nested op# exprs and their inputs
     call s:ComputeMapOnStack(l:handle)
@@ -115,10 +115,10 @@ function s:ComputeMapOnStack(handle) abort
             " recursion typically happens at this ProbeExpr call, but can also
             " happen in HijackInput if a registered omap is triggered
 
-            call s:ProbeExpr(a:handle['init']['op'] .. a:handle['expr_orig'], 'expr_orig')
+            call s:ProbeExpr(a:handle['init']['op'] .. a:handle['expr']['orig'], 'expr_orig')
             let l:input = s:HijackInput(a:handle)
             call s:CheckForProbeErrors()
-            let a:handle['expr_reduced'] ..= l:input
+            let a:handle['expr']['reduced'] ..= l:input
         catch /op#abort/
             echohl ErrorMsg | echomsg _op_#stack#GetException() | echohl None
             call interrupt()
@@ -127,14 +127,14 @@ function s:ComputeMapOnStack(handle) abort
         call s:ParentCallInit(a:handle)
         call inputsave()
 
-        call s:ProbeExpr(a:handle['init']['op'] .. a:handle['expr_orig'], 'expr_orig')
+        call s:ProbeExpr(a:handle['init']['op'] .. a:handle['expr']['orig'], 'expr_orig')
         let l:input = s:HijackInput(a:handle)
         call s:CheckForProbeErrors()
-        let a:handle['expr_reduced'] ..= l:input
+        let a:handle['expr']['reduced'] ..= l:input
         call s:ParentCallUpdate(a:handle)
 
-        call s:Log('ComputeMapOnStack', 'EXIT', 'FEED_tx!=' .. a:handle['init']['op'] .. a:handle['expr_reduced'])
-        silent call feedkeys(a:handle['init']['op'] .. a:handle['expr_reduced'], 'tx!')
+        call s:Log('ComputeMapOnStack', 'EXIT', 'FEED_tx!=' .. a:handle['init']['op'] .. a:handle['expr']['reduced'])
+        silent call feedkeys(a:handle['init']['op'] .. a:handle['expr']['reduced'], 'tx!')
         call inputrestore()
     endif
 endfunction
@@ -146,7 +146,7 @@ function s:HijackInput(handle) abort
         return ''
     endif
 
-    if a:handle['input_source'] ==# 'input_cache'
+    if a:handle['expr']['input_source'] ==# 'input_cache'
         let s:input_stream = remove(a:handle['input_cache'], 0)
         return s:input_stream
     endif
@@ -154,7 +154,7 @@ function s:HijackInput(handle) abort
     " Get input from ambig maps, user, or typeahead
     let s:input_stream = ''
     let l:op = a:handle['init']['op']
-    let l:expr = a:handle['expr_reduced']
+    let l:expr = a:handle['expr']['reduced']
 
     " call s:Log(s:Pad('HijackInput GET INPUT: ', 30) .. 'expr=' .. l:op .. l:expr .. ' typeahead=' .. s:TypeaheadLog())
 
@@ -166,7 +166,7 @@ function s:HijackInput(handle) abort
     endwhile
 
     if s:hijack['hmode'] =~# s:operator_hmode_pattern
-        if a:handle['input_source'] ==# 'user'
+        if a:handle['expr']['input_source'] ==# 'user'
             while s:hijack['hmode'] =~# s:operator_hmode_pattern
                 let l:char = s:GetCharFromUser(a:handle)
                 call s:Log('', 'GOT CHAR=' .. l:char)
@@ -197,12 +197,12 @@ function s:HijackInput(handle) abort
     " the input stream, so let the operand store it's parent input stream (which
     " is expr_reduced of this frame) too.
     if a:handle['init']['op_type'] ==# 'operand'
-        call s:Log('HijackInput', 'store', 'operand=' .. a:handle['expr_reduced'])
-        call add(s:inputs, a:handle['expr_reduced'])
+        call s:Log('HijackInput', 'store', 'operand=' .. a:handle['expr']['reduced'])
+        call add(s:inputs, a:handle['expr']['reduced'])
     endif
     if !empty(s:input_stream)
         call s:Log('HijackInput', 'store', 'input_stream=' .. s:input_stream)
-        let a:handle['op_input_id'] = len(s:inputs)
+        let a:handle['expr']['op_input_id'] = len(s:inputs)
         call add(s:inputs, s:input_stream)
     endif
 
@@ -299,7 +299,7 @@ function s:ParentCallInit(handle) abort
 
     " calling_expr = [already executed] .. [current map call] .. [omap input] .. [typeahead] .. [hijack_probe]
     let l:parent_handle = _op_#stack#GetPrev(a:handle)
-    let l:calling_expr = l:parent_handle['expr_reduced']
+    let l:calling_expr = l:parent_handle['expr']['reduced']
 
     " remove remnants of hijack_probe .. hijack_esc placed by HijackInput
     let l:typeahead = s:ReadTypeahead()
@@ -308,7 +308,7 @@ function s:ParentCallInit(handle) abort
 
     " [already executed] .. [current map call] .. [typeahead] -> [current map call]
     let l:calling_expr = substitute(l:calling_expr, '\V' .. escape(l:typeahead, '\') .. '\$', '', '')
-    let l:calling_expr = substitute(l:calling_expr, '\V\^' .. escape(l:parent_handle['expr_reduced_so_far'], '\'), '', '')
+    let l:calling_expr = substitute(l:calling_expr, '\V\^' .. escape(l:parent_handle['expr']['reduced_so_far'], '\'), '', '')
 
     " in case [current map call] == xxxOP1, remove xxx
     let l:parent_call = l:calling_expr
@@ -330,20 +330,20 @@ function s:ParentCallInit(handle) abort
     " store reduced call
     call s:Log('ParentCallInit', '', 'parent_call=' .. l:parent_call .. '    parent_expr_reduced_so_far+=' .. strcharpart(l:calling_expr, 0, l:count))
     let a:handle['parent_call'] = l:parent_call
-    let l:parent_handle['expr_reduced_so_far'] ..= strcharpart(l:calling_expr, 0, l:count)
+    let l:parent_handle['expr']['reduced_so_far'] ..= strcharpart(l:calling_expr, 0, l:count)
 endfunction
 
 function s:ParentCallUpdate(handle) abort
-    let l:expr = a:handle['init']['op'] .. a:handle['expr_reduced']
+    let l:expr = a:handle['init']['op'] .. a:handle['expr']['reduced']
     let l:parent_handle = _op_#stack#GetPrev(a:handle)
-    let l:update_pattern = '\V' .. escape(l:parent_handle['expr_reduced_so_far'], '\') .. '\zs' .. escape(a:handle['parent_call'], '\')
-    let l:update = substitute(l:parent_handle['expr_reduced'], l:update_pattern, escape(l:expr, '\'), '')
-    if l:update ==# l:parent_handle['expr_reduced']
+    let l:update_pattern = '\V' .. escape(l:parent_handle['expr']['reduced_so_far'], '\') .. '\zs' .. escape(a:handle['parent_call'], '\')
+    let l:update = substitute(l:parent_handle['expr']['reduced'], l:update_pattern, escape(l:expr, '\'), '')
+    if l:update ==# l:parent_handle['expr']['reduced']
         call _op_#op#Throw('cyclops.vim: "unexpected error while updating parent call"')
     endif
-    call s:Log('ParentCallUpdate', '', l:parent_handle['expr_reduced'] .. ' -> ' .. l:update)
-    let l:parent_handle['expr_reduced'] = l:update
-    let l:parent_handle['expr_reduced_so_far'] ..= l:expr
+    call s:Log('ParentCallUpdate', '', l:parent_handle['expr']['reduced'] .. ' -> ' .. l:update)
+    let l:parent_handle['expr']['reduced'] = l:update
+    let l:parent_handle['expr']['reduced_so_far'] ..= l:expr
 endfunction
 
 function s:GetCharFromUser(handle) abort
@@ -374,8 +374,8 @@ function s:GetCharFromUser_i(handle) abort
     try
         " update buffer if waiting for user input
         if !getchar(1)
-            call s:Log('GetCharFromUser_i', s:PModes(0), 'FEED_tx=' .. a:handle['expr_reduced'] .. s:input_stream)
-            silent call feedkeys(a:handle['expr_reduced'] .. s:input_stream, 'tx')
+            call s:Log('GetCharFromUser_i', s:PModes(0), 'FEED_tx=' .. a:handle['expr']['reduced'] .. s:input_stream)
+            silent call feedkeys(a:handle['expr']['reduced'] .. s:input_stream, 'tx')
             let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
             call add(l:match_ids, matchadd(l:cursor_hl, '\%'.line('.').'l\%'.(col('.')+1).'c'))
             redraw
@@ -478,15 +478,15 @@ function s:GetCharFromTypeahead(handle) abort
 
     " traverse stack to find available typeahead (if any)
     let [ l:handle, l:parent_handle ] = [ a:handle, _op_#stack#GetPrev(a:handle) ]
-    let l:parent_typeahead = matchstr(l:parent_handle['expr_reduced'], '\V'.l:handle['parent_call'].'\zs\.\*')
+    let l:parent_typeahead = matchstr(l:parent_handle['expr']['reduced'], '\V'.l:handle['parent_call'].'\zs\.\*')
     while l:handle['stack_level'] > 0 && empty(l:parent_typeahead)
         let [ l:handle, l:parent_handle ] = [ _op_#stack#GetPrev(l:handle), _op_#stack#GetPrev(l:parent_handle) ]
-        let l:parent_typeahead = matchstr(l:parent_handle['expr_reduced'], '\V'.l:handle['parent_call'].'\zs\.\*')
+        let l:parent_typeahead = matchstr(l:parent_handle['expr']['reduced'], '\V'.l:handle['parent_call'].'\zs\.\*')
     endwhile
 
     " consume from parent typeahead if available
     if !empty(l:parent_typeahead)
-        let l:parent_handle['expr_reduced'] = matchstr(l:parent_handle['expr_reduced'], '\V\^\.\{-}'.l:handle['parent_call']).strcharpart(l:parent_typeahead, 1)
+        let l:parent_handle['expr']['reduced'] = matchstr(l:parent_handle['expr']['reduced'], '\V\^\.\{-}'.l:handle['parent_call']).strcharpart(l:parent_typeahead, 1)
         if  !empty(l:nr) && ( l:char !=# strcharpart(l:parent_typeahead, 0, 1) )
             call _op_#op#Throw('cyclops.vim: Typeahead mismatch while processing operator')
         endif
@@ -558,7 +558,7 @@ function _op_#op#ExprWithModifiers(handle, modifiers, ...) abort
     let l:mods = a:modifiers
 
     let l:register = (l:opts['accepts_register'])? '"' .. l:mods['register'] : ''
-    let l:expr_with_modifiers = l:register .. l:op .. a:handle['expr_reduced']
+    let l:expr_with_modifiers = l:register .. l:op .. a:handle['expr']['reduced']
 
     if l:opts['accepts_count'] && l:mods['count1'] != 1
         let l:expr_with_modifiers = l:mods['count1'].l:expr_with_modifiers
@@ -567,25 +567,23 @@ function _op_#op#ExprWithModifiers(handle, modifiers, ...) abort
     endif
 
     " expr_with_modifiers stored for debugging
-    let a:handle['expr_with_modifiers'] = l:expr_with_modifiers
+    let a:handle['expr']['with_modifiers'] = l:expr_with_modifiers
     return l:expr_with_modifiers
 endfunction
 
 
 function s:StoreHandle(handle) abort
-    call s:Log('StoreHandle ' .. a:handle['init']['handle_type'], '', 'expr=' .. a:handle['expr_reduced'])
+    call s:Log('StoreHandle ' .. a:handle['init']['handle_type'], '', 'expr=' .. a:handle['expr']['reduced'])
     let l:handle_to_store = deepcopy(a:handle)
 
     if a:handle['init']['op_type'] ==# 'operand'
         " TODO: chained operand support
-        let l:input = s:inputs[a:handle['op_input_id']]
-        call extend(l:handle_to_store, { 'inputs': [ l:input ] })
+        let l:input = s:inputs[a:handle['expr']['op_input_id']]
+        call extend(l:handle_to_store['expr'], { 'inputs': [ l:input ] })
     else
-        call extend(l:handle_to_store, { 'inputs': deepcopy(s:inputs) })
+        call extend(l:handle_to_store['expr'], { 'inputs': deepcopy(s:inputs) })
     endif
-
-    call remove(l:handle_to_store, 'stack_level')
-    call remove(l:handle_to_store, 'stack_id')
+    call remove(l:handle_to_store, 'stack')
 
     let l:name = a:handle['init']['handle_type']
     let s:handles[l:name] = l:handle_to_store
