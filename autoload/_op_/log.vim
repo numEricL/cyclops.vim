@@ -122,8 +122,9 @@ function s:ToPrintable(value) abort
                 \ '<c-p>', '<c-q>', '<c-r>', '<c-s>', '<c-t>', '<c-u>', '<c-v>', '<c-w>',
                 \ '<c-x>', '<c-y>', '<c-z>', '<esc>', '<fs>' , '<gs>' , '<rs>' , '<us>' ,
                 \ ]
-    let l:value = substitute(a:value, "\<plug>", '<plug>', 'g')
-    let l:value = substitute(a:value, "\<cmd>" , '<cmd>' , 'g')
+    let l:value = a:value
+    let l:value = substitute(l:value, "\<plug>", '<plug>', 'g')
+    let l:value = substitute(l:value, "\<cmd>" , '<cmd>' , 'g')
     let l:output = ''
     for l:char in split(l:value, '\zs')
         let l:nr = char2nr(l:char)
