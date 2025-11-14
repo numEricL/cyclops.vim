@@ -6,7 +6,6 @@
 "TODO: silent on repeat
 "TODO: operator pending mode for dot/pair repeat
 "TODO: pair repeat with different modes?
-"TODO: SetMap for dot/pair
 "TODO: opts for: shift_marks, visual_motion
 "TODO: use neovim virtual text instead of actual insertion during HijackInput
 

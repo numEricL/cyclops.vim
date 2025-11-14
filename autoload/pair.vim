@@ -10,13 +10,12 @@ set cpo&vim
 silent! call _op_#init#settings#Load()
 
 let s:AssertExprMap     = function('_op_#init#AssertExprMap')
-let s:AssertSameRHS     = function('_op_#init#AssertSameRHS')
 let s:ExtendDefaultOpts = function('_op_#init#ExtendDefaultOpts')
-let s:RegisterNoremap   = function('_op_#init#RegisterNoremap')
+let s:StackInit         = function('_op_#op#StackInit')
 
 function pair#MapNext(pair, ...) abort range
     call s:AssertExprMap()
-    let l:handle = _op_#op#StackInit()
+    let l:handle = s:StackInit()
     call _op_#op#InitCallback(l:handle, 'pair', a:pair[0], s:ExtendDefaultOpts(a:000))
     call _op_#pair#Initcallback(l:handle, a:pair, 'next')
     let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
@@ -25,7 +24,7 @@ endfunction
 
 function pair#MapPrev(pair, ...) abort range
     call s:AssertExprMap()
-    let l:handle = _op_#op#StackInit()
+    let l:handle = s:StackInit()
     call _op_#op#InitCallback(l:handle, 'pair', a:pair[1], s:ExtendDefaultOpts(a:000))
     call _op_#pair#Initcallback(l:handle, a:pair, 'prev')
     let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
@@ -35,7 +34,7 @@ endfunction
 function pair#NoremapNext(pair, ...) abort range
     call s:AssertExprMap()
     let l:pair = s:RegisterNoremapPair(a:pair)
-    let l:handle = _op_#op#StackInit()
+    let l:handle = s:StackInit()
     call _op_#op#InitCallback(l:handle, 'pair', l:pair[0], s:ExtendDefaultOpts(a:000))
     call _op_#pair#Initcallback(l:handle, l:pair, 'next')
     let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
@@ -45,7 +44,7 @@ endfunction
 function pair#NoremapPrev(pair, ...) abort range
     call s:AssertExprMap()
     let l:pair = s:RegisterNoremapPair(a:pair)
-    let l:handle = _op_#op#StackInit()
+    let l:handle = s:StackInit()
     call _op_#op#InitCallback(l:handle, 'pair', l:pair[1], s:ExtendDefaultOpts(a:000))
     call _op_#pair#Initcallback(l:handle, l:pair, 'prev')
     let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
@@ -74,7 +73,7 @@ function s:SetMap(mapping_type, pair, opts) abort
         let l:modes = (a:mapping_type =~# '\v^(no|map)')? 'nvo' : a:mapping_type[0]
         let l:plugpair = ['', '']
         for l:id in range(2)
-            call s:AssertSameRHS(a:pair[l:id], l:modes)
+            call _op_#init#AssertSameRHS(a:pair[l:id], l:modes)
             let l:create_plugmap = ''
             let l:plugpair[l:id] = '<plug>(op#_'.a:mapping_type.'_'.a:pair[l:id].')'
             let l:mapinfo = maparg(a:pair[l:id], l:modes[0], 0, 1)
@@ -97,8 +96,8 @@ function s:RegisterNoremapPair(pair) abort range
     if type(a:pair) != v:t_list || len(a:pair) != 2
         throw 'cyclops.vim: Input must be a pair of maps'
     endif
-    let l:map0 = s:RegisterNoremap(a:pair[0])
-    let l:map1 = s:RegisterNoremap(a:pair[1])
+    let l:map0 = _op_#init#RegisterNoremap(a:pair[0])
+    let l:map1 = _op_#init#RegisterNoremap(a:pair[1])
     return [ l:map0, l:map1 ]
 endfunction
 

@@ -8,13 +8,13 @@ set cpo&vim
 silent! call _op_#init#settings#Load()
 
 let s:AssertExprMap     = function('_op_#init#AssertExprMap')
-let s:AssertSameRHS     = function('_op_#init#AssertSameRHS')
 let s:ExtendDefaultOpts = function('_op_#init#ExtendDefaultOpts')
+let s:StackInit         = function('_op_#op#StackInit')
 let s:RegisterNoremap   = function('_op_#init#RegisterNoremap')
 
 function dot#Map(map, ...) abort range
     call s:AssertExprMap()
-    let l:handle = _op_#op#StackInit()
+    let l:handle = s:StackInit()
     call _op_#op#InitCallback(l:handle, 'dot', a:map, s:ExtendDefaultOpts(a:000))
     call _op_#dot#InitCallback(l:handle)
     let &operatorfunc = '_op_#dot#ComputeMapCallback'
@@ -25,7 +25,7 @@ endfunction
 function dot#Noremap(map, ...) abort range
     call s:AssertExprMap()
     let l:map = s:RegisterNoremap(a:map)
-    let l:handle = _op_#op#StackInit()
+    let l:handle = s:StackInit()
     call _op_#op#InitCallback(l:handle, 'dot', l:map, s:ExtendDefaultOpts(a:000))
     call _op_#dot#InitCallback(l:handle)
     let &operatorfunc = '_op_#dot#ComputeMapCallback'
@@ -51,7 +51,7 @@ function s:SetMap(mapping_type, map, opts_dict) abort
         execute a:mapping_type .. ' <expr> ' .. a:map .. ' dot#Noremap(' .. string(a:map) .. ', ' .. string(a:opts_dict) .. ')'
     else
         let l:modes = (a:mapping_type =~# '\v^(no|map)')? 'nvo' : a:mapping_type[0]
-        call s:AssertSameRHS(a:map, l:modes)
+        call _op_#init#AssertSameRHS(a:map, l:modes)
         let l:create_plugmap = ''
         let l:plugmap = '<plug>(op#_'.a:mapping_type.'_'.a:map.')'
         let l:mapinfo = maparg(a:map, l:modes[0], 0, 1)
