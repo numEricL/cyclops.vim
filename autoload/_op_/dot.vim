@@ -15,19 +15,12 @@ function _op_#dot#InitCallback(handle) abort
     call extend(a:handle, { 'marks': {
                 \ '.'  : getpos('.'),
                 \ 'v'  : getpos('v'),
-                \ "'<" : getpos("'<"),
-                \ "'>" : getpos("'>"),
                 \ } } )
-
-                " \ "'[" : getpos("'["),
-                " \ "']" : getpos("']"),
-    " \ 'v_mode' : visualmode(),
-    " let l:count1 = (v:count)? v:count : l:handle['mods']['count1']
 endfunction
 
 function _op_#dot#ComputeMapCallback(dummy) abort
     let l:handle = _op_#stack#Top()
-    call s:RestoreEntry(l:handle)
+    call s:RestoreEntry(l:handle, 'dot')
     call _op_#op#ComputeMapCallback()
     if empty(_op_#stack#GetException())
         let &operatorfunc = '_op_#dot#RepeatCallback'
@@ -37,10 +30,10 @@ function _op_#dot#ComputeMapCallback(dummy) abort
     endif
 endfunction
 
-function s:RestoreEntry(handle) abort
-    if a:handle['dot']['mode'] ==# 'n'
-        call setpos('.', a:handle['dot']['curpos'])
-    elseif a:handle['dot']['mode'] =~# '\v^[vV]$'
+function s:RestoreEntry(handle, key) abort
+    if a:handle[a:key]['mode'] ==# 'n'
+        call setpos('.', a:handle[a:key]['curpos'])
+    elseif a:handle[a:key]['mode'] =~# '\v^[vV]$'
         let l:selectmode = &selectmode | set selectmode=
         normal! gv
         let &selectmode = l:selectmode
@@ -48,24 +41,26 @@ function s:RestoreEntry(handle) abort
 endfunction
 
 function _op_#dot#ExceptionCallback(dummy) abort
+    let l:handle = _op_#op#GetStoredHandle('dot')
+    call s:RestoreEntry(l:handle, 'repeat')
     echohl ErrorMsg | echomsg 'last dot operation failed' | echohl None
 endfunction
 
 function _op_#dot#RepeatMap() abort
     call _op_#init#AssertExprMap()
     let l:handle = _op_#op#GetStoredHandle('dot')
+    call _op_#dot#InitRepeatCallback(l:handle)
 
-    if empty(l:handle) || (mode(0) =~# '\v^[vV]$' && l:handle['init']['mode'] ==# 'n')
+    if !has_key(l:handle, 'init') || (mode(0) =~# '\v^[vV]$' && l:handle['init']['mode'] ==# 'n')
         return '.'
     endif
 
-    call _op_#dot#InitRepeatCallback(l:handle)
     if mode(1) ==# 'n'
         return '.'
     elseif mode(0) =~# '\v^[vV]$'
         return "\<esc>."
     else
-        throw 'unimplemented mode: ' . mode(1)
+        throw 'cyclops.vim: unimplemented mode: ' . mode(1)
     endif
 endfunction
 
@@ -94,12 +89,17 @@ function _op_#dot#RepeatCallback(dummy) abort
     let l:handle = _op_#op#GetStoredHandle('dot')
     call s:RestoreRepeatEntry(l:handle)
     let l:expr = l:handle['expr']['reduced']
-    call feedkeys(_op_#op#ExprWithModifiers(l:expr, l:handle['repeat_mods'], l:handle['opts']))
+    if l:handle['opts']['silent']
+        silent call feedkeys(_op_#op#ExprWithModifiers(l:expr, l:handle['repeat_mods'], l:handle['opts']), 'x!')
+    else
+        call feedkeys(_op_#op#ExprWithModifiers(l:expr, l:handle['repeat_mods'], l:handle['opts']), 'x!')
+    endif
 endfunction
 
 function s:RestoreRepeatEntry(handle) abort
     let l:imode = a:handle['dot']['mode']
     let l:rmode = a:handle['repeat']['mode']
+    " echom 'imode=' . l:imode . ' rmode=' . l:rmode . ' mode(1)=' . mode(1)
 
     " if initiated in operator-pending mode then treat like normal mode
     let l:init_repeat = v:false
@@ -113,6 +113,8 @@ function s:RestoreRepeatEntry(handle) abort
         call setpos('.', l:v_beg)
         execute "normal! " .. a:handle['dot']['mode']
         call setpos('.', l:v_end)
+        " echom 'v_beg=' . string(l:v_beg) . ' v_end=' . string(l:v_end)
+        " echom 'mode(1)=' . mode(1) .. " '< = " . string(getpos("'<")) .. " '> = " . string(getpos("'>")) .. " '[ = " . string(getpos("'[")) .. " '] = " . string(getpos("']"))
         let l:init_repeat = v:true
     elseif l:imode =~# '\v^[vV]$' && l:rmode =~# '\v^[vV]$'
         let l:selectmode = &selectmode | set selectmode=

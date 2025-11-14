@@ -62,11 +62,8 @@ function pair#SetMaps(mapping_type, pairs, ...) abort range
     endif
 endfunction
 
-function s:SetMap(mapping_type, pair, opts) abort
-    let l:noremap = (a:mapping_type =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)')
-
-
-    if l:noremap
+function s:SetMap(mapping_type, pair, opts_dict) abort
+    if a:mapping_type =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)'
         execute a:mapping_type .. ' <expr> ' .. a:pair[0] .. ' pair#NoremapNext(' .. string(a:pair[0]) .. ', ' .. string(a:opts_dict) .. ')'
         execute a:mapping_type .. ' <expr> ' .. a:pair[1] .. ' pair#NoremapPrev(' .. string(a:pair[1]) .. ', ' .. string(a:opts_dict) .. ')'
     else
@@ -87,8 +84,8 @@ function s:SetMap(mapping_type, pair, opts) abort
             let l:create_plugmap .= l:plugpair[l:id] .. ' ' .. l:rhs
             execute l:create_plugmap
         endfor
-        execute a:mapping_type.' <expr> '.a:pair[0].' pair#MapNext('.string(l:plugpair).', '.string(a:opts).')'
-        execute a:mapping_type.' <expr> '.a:pair[1].' pair#MapPrev('.string(l:plugpair).', '.string(a:opts).')'
+        execute a:mapping_type.' <expr> '.a:pair[0].' pair#MapNext('.string(l:plugpair).', '.string(a:opts_dict).')'
+        execute a:mapping_type.' <expr> '.a:pair[1].' pair#MapPrev('.string(l:plugpair).', '.string(a:opts_dict).')'
     endif
 endfunction
 

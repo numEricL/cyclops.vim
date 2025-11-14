@@ -27,7 +27,7 @@ function _op_#pair#PairRepeatMap(dir) abort
     let l:stored_handle = _op_#op#GetStoredHandle('pair')
 
     " do nothing
-    if empty(l:stored_handle) || (mode(0) =~# '\v^[vV]$' && l:stored_handle['init']['mode'] ==# 'n')
+    if empty(l:stored_handle)
         return ''
     endif
 
@@ -69,7 +69,11 @@ function _op_#pair#RepeatCallback() abort
     let l:handle = _op_#op#GetStoredHandle('pair')
     let l:id = l:handle['repeat']['id']
     let l:expr = l:handle['pair']['reduced'][l:id]
-    call feedkeys(_op_#op#ExprWithModifiers(l:expr, l:handle['repeat_mods'], l:handle['opts']))
+    if l:handle['opts']['silent']
+        silent call feedkeys(_op_#op#ExprWithModifiers(l:expr, l:handle['repeat_mods'], l:handle['opts']), 'x!')
+    else
+        call feedkeys(_op_#op#ExprWithModifiers(l:expr, l:handle['repeat_mods'], l:handle['opts']), 'x!')
+    endif
 endfunction
 
 " function s:PairOpPending(direction)
