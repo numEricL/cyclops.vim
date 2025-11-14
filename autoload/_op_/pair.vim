@@ -101,49 +101,5 @@ endfunction
 "     endif
 " endfunction
 
-" OLD
-function s:PairRepeat(direction, count, register, mode) abort
-    let l:stored_handle = s:GetHandle('pair')
-    " if has_key(l:stored_handle, 'abort') || empty(l:stored_handle)
-    "     return
-    " endif
-    " if l:stored_handle['expr'] =~# '\V\^'."\<plug>".'(op#_noremap_\[fFtT;,])'
-    "     " workaround for cpo-;
-    "     let l:stored_handle['expr'] = (a:direction ==# ';')? "\<plug>(op#_noremap_;)" : "\<plug>(op#_noremap_,)"
-    "     call s:InitRepeat(l:stored_handle, a:count, a:register, a:mode)
-    "     call s:Callback('', 'pair')
-    "     return
-    " endif
-
-    let l:old_id = l:stored_handle['pair_id']
-    let l:id = (a:direction ==# ';')? l:old_id : !l:old_id
-    if l:stored_handle['pair_state'][l:id] ==# 'valid'
-        call extend(l:stored_handle, {'pair_id': l:id, 'expr': l:stored_handle['pair'][l:id]})
-        call s:InitRepeat(l:stored_handle, a:count, a:register, a:mode)
-        call s:Callback('', 'pair')
-        let l:stored_handle['pair_id'] = l:old_id
-    else
-        call _op_#stack#Init()
-        let l:stack_handle = _op_#stack#Top()
-        " TODO: deepcopy from pair partner and modify only necessary fields
-        call extend(l:stack_handle, {
-                    \ 'accepts_count'    : l:stored_handle['accepts_count'],
-                    \ 'accepts_register' : l:stored_handle['accepts_register'],
-                    \ 'expr'             : l:stored_handle['pair'][l:id],
-                    \ 'expr_so_far'      : '',
-                    \ 'input_cache'      : deepcopy(l:stored_handle['inputs']),
-                    \ 'input_source'     : 'input_cache',
-                    \ 'handle_type'          : 'pair',
-                    \ 'pair'             : deepcopy(l:stored_handle['pair']),
-                    \ 'pair_id'          : l:id,
-                    \ 'pair_state'       : l:stored_handle['pair_state'],
-                    \ 'shift_marks'      : l:stored_handle['shift_marks'],
-                    \ 'visual_motion'    : l:stored_handle['visual_motion'],
-                    \ })
-        call s:InitRepeat(l:stack_handle, a:count, a:register, a:mode)
-        call s:Callback('', 'init')
-    endif
-endfunction
-
 let &cpo = s:cpo
 unlet s:cpo

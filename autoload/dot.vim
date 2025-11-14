@@ -46,14 +46,26 @@ endfunction
 
 function s:SetMap(mapping_type, map, opts_dict) abort
     let l:noremap = (a:mapping_type =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)')
-    let l:modes = (a:mapping_type =~# '\v^(no|map)')? 'nvo' : a:mapping_type[0]
 
-    if l:noremap || empty(maparg(a:map, l:modes[0]))
-        call s:RegisterNoremap(a:map)
+    if l:noremap
+        execute a:mapping_type .. ' <expr> ' .. a:map .. ' dot#Noremap(' .. string(a:map) .. ', ' .. string(a:opts_dict) .. ')'
     else
-        call s:AssertSameRHS(split(l:modes, '\zs'), a:map)
+        let l:modes = (a:mapping_type =~# '\v^(no|map)')? 'nvo' : a:mapping_type[0]
+        call s:AssertSameRHS(a:map, l:modes)
+        let l:create_plugmap = ''
+        let l:plugmap = '<plug>(op#_'.a:mapping_type.'_'.a:map.')'
+        let l:mapinfo = maparg(a:map, l:modes[0], 0, 1)
+        let l:rhs = substitute(l:mapinfo['rhs'], '\V<sid>', '<snr>'.l:mapinfo['sid'].'_', '')
+        let l:rhs = substitute(l:rhs, '\v(\|)@<!\|(\|)@!', '<bar>', 'g')
+        let l:create_plugmap .= (l:mapinfo['noremap'])? 'noremap ' : 'map '
+        let l:create_plugmap .= (l:mapinfo['buffer'])? '<buffer>' : ''
+        let l:create_plugmap .= (l:mapinfo['nowait'])? '<nowait>' : ''
+        let l:create_plugmap .= (l:mapinfo['silent'])? '<silent>' : ''
+        let l:create_plugmap .= (l:mapinfo['expr'])? '<expr>' : ''
+        let l:create_plugmap .= l:plugmap .. ' ' .. l:rhs
+        execute l:create_plugmap
+        execute a:mapping_type .. ' <expr> ' .. a:map .. ' dot#Map(' .. string(l:plugmap) .. ', ' .. string(a:opts_dict) .. ')'
     endif
-    execute a:mapping_type .. ' <expr> ' .. a:map .. ' dot#Map(' .. string(maparg(a:map, l:modes[0])) .. ', ' .. string(a:opts_dict) .. ')'
 endfunction
 
 let &cpo = s:cpo

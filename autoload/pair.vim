@@ -53,26 +53,28 @@ function pair#NoremapPrev(pair, ...) abort range
 endfunction
 
 function pair#SetMaps(mapping_type, pairs, ...) abort range
-    let l:opts = s:CheckOptsDict(a:000)
+    let l:opts_dict = a:0 ? a:1 : {}
     if type(a:pairs[0]) == v:t_list
         for l:pair in a:pairs
-            call s:SetMap(a:mapping_type, l:pair, l:opts)
+            call s:SetMap(a:mapping_type, l:pair, l:opts_dict)
         endfor
     else
-        call s:SetMap(a:mapping_type, a:pairs, l:opts)
+        call s:SetMap(a:mapping_type, a:pairs, l:opts_dict)
     endif
 endfunction
 
 function s:SetMap(mapping_type, pair, opts) abort
     let l:noremap = (a:mapping_type =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)')
-    let l:modes = (a:mapping_type =~# '\v^(no|map)')? 'nvo' : a:mapping_type[0]
 
-    let l:plugpair = ['', '']
-    for l:id in range(2)
-        if l:noremap || empty(maparg(a:pair[l:id], l:modes[0]))
-            let l:plugpair[l:id] = s:RegisterNoremap(a:pair[l:id])
-        else
-            call s:AssertSameRHS(split(l:modes, '\zs'), a:pair[l:id])
+
+    if l:noremap
+        execute a:mapping_type .. ' <expr> ' .. a:pair[0] .. ' pair#NoremapNext(' .. string(a:pair[0]) .. ', ' .. string(a:opts_dict) .. ')'
+        execute a:mapping_type .. ' <expr> ' .. a:pair[1] .. ' pair#NoremapPrev(' .. string(a:pair[1]) .. ', ' .. string(a:opts_dict) .. ')'
+    else
+        let l:modes = (a:mapping_type =~# '\v^(no|map)')? 'nvo' : a:mapping_type[0]
+        let l:plugpair = ['', '']
+        for l:id in range(2)
+            call s:AssertSameRHS(a:pair[l:id], l:modes)
             let l:create_plugmap = ''
             let l:plugpair[l:id] = '<plug>(op#_'.a:mapping_type.'_'.a:pair[l:id].')'
             let l:mapinfo = maparg(a:pair[l:id], l:modes[0], 0, 1)
@@ -85,10 +87,10 @@ function s:SetMap(mapping_type, pair, opts) abort
             let l:create_plugmap .= (l:mapinfo['expr'])? '<expr>' : ''
             let l:create_plugmap .= l:plugpair[l:id] .. ' ' .. l:rhs
             execute l:create_plugmap
-        endif
-    endfor
-    execute a:mapping_type.' <expr> '.a:pair[0].' pair#MapNext('.string(l:plugpair).', '.string(a:opts).')'
-    execute a:mapping_type.' <expr> '.a:pair[1].' pair#MapPrevious('.string(l:plugpair).', '.string(a:opts).')'
+        endfor
+        execute a:mapping_type.' <expr> '.a:pair[0].' pair#MapNext('.string(l:plugpair).', '.string(a:opts).')'
+        execute a:mapping_type.' <expr> '.a:pair[1].' pair#MapPrev('.string(l:plugpair).', '.string(a:opts).')'
+    endif
 endfunction
 
 function s:RegisterNoremapPair(pair) abort range

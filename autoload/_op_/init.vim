@@ -19,17 +19,22 @@ function _op_#init#AssertExprMap() abort
     endif
 endfunction
 
-function _op_#init#AssertSameRHS(modes, map) abort
+function _op_#init#AssertSameRHS(map, modes) abort
     if !g:cyclops_asserts_enabled
         return
     endif
 
-    if len(a:modes) < 2
+    let l:mode_list = split(a:modes, '\zs')
+    let l:first_rhs = maparg(a:map, l:mode_list[0])
+    if empty(l:first_rhs)
+        throw 'cyclops.vim: Mapping "' .. a:map .. '" does not exist'
+    endif
+
+    if len(l:mode_list) < 2
         return
     endif
 
-    let l:first_rhs = maparg(a:map, a:modes[0])
-    for l:next_mode in a:modes[1:]
+    for l:next_mode in l:mode_list[1:]
         if l:first_rhs !=# maparg(a:map, l:next_mode)
             throw 'cyclops.vim: Mapped keys in different modes must have the same RHS: '.a:map
         endif

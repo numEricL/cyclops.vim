@@ -4,6 +4,10 @@
 
 "TODO: enable chained operand support (refactor s:inputs, operand expr reduction)
 "TODO: silent on repeat
+"TODO: operator pending mode for dot/pair repeat
+"TODO: pair repeat with different modes?
+"TODO: SetMap for dot/pair
+"TODO: opts for: shift_marks, visual_motion
 "TODO: use neovim virtual text instead of actual insertion during HijackInput
 
 let s:cpo = &cpo
@@ -482,7 +486,7 @@ function s:GetCharFromTypeahead(handle) abort
     " traverse stack to find available typeahead (if any)
     let [ l:handle, l:parent_handle ] = [ a:handle, _op_#stack#GetPrev(a:handle) ]
     let l:parent_typeahead = matchstr(l:parent_handle['expr']['reduced'], '\V'.l:handle['parent_call'].'\zs\.\*')
-    while l:handle['stack_level'] > 0 && empty(l:parent_typeahead)
+    while l:handle['stack']['level'] > 0 && empty(l:parent_typeahead)
         let [ l:handle, l:parent_handle ] = [ _op_#stack#GetPrev(l:handle), _op_#stack#GetPrev(l:parent_handle) ]
         let l:parent_typeahead = matchstr(l:parent_handle['expr']['reduced'], '\V'.l:handle['parent_call'].'\zs\.\*')
     endwhile

@@ -76,7 +76,7 @@ function _op_#stack#Top() abort
 endfunction
 
 function _op_#stack#GetPrev(handle) abort
-    return s:stack[a:handle['stack_level']-1]
+    return s:stack[a:handle['stack']['level']-1]
 endfunction
 
 function _op_#stack#GetException() abort
