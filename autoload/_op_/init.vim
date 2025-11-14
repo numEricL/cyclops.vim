@@ -15,19 +15,20 @@ function _op_#init#AssertExprMap() abort
         let l:expr_map = 1
     endtry
     if !l:expr_map
-        throw 'cyclops.vim: Error while processing map, <expr> map must be used for this plugin'
+        throw 'cyclops.vim: Assertion failed: Error while processing map, <expr> map must be used for this plugin'
     endif
 endfunction
 
-function _op_#init#AssertSameRHS(map, modes) abort
+function _op_#init#AssertSameRHS(map, mapping_type) abort
     if !g:cyclops_asserts_enabled
         return
     endif
 
-    let l:mode_list = split(a:modes, '\zs')
+    let l:modes = (a:mapping_type =~# '\v^(map)')? 'nvo' : a:mapping_type[0]
+    let l:mode_list = split(l:modes, '\zs')
     let l:first_rhs = maparg(a:map, l:mode_list[0])
     if empty(l:first_rhs)
-        throw 'cyclops.vim: Mapping "' .. a:map .. '" does not exist'
+        throw 'op#MAP_DNE'
     endif
 
     if len(l:mode_list) < 2
@@ -36,9 +37,18 @@ function _op_#init#AssertSameRHS(map, modes) abort
 
     for l:next_mode in l:mode_list[1:]
         if l:first_rhs !=# maparg(a:map, l:next_mode)
-            throw 'cyclops.vim: Mapped keys in different modes must have the same RHS: '.a:map
+            throw 'cyclops.vim: Assertion failed: Mapped keys in different modes must have the same RHS: '.a:map
         endif
     endfor
+endfunction
+
+function _op_#init#AssertPair(pair) abort
+    if !g:cyclops_asserts_enabled
+        return
+    endif
+    if type(a:pair) != v:t_list || len(a:pair) != 2
+        throw 'cyclops.vim: Assertion failed: Input must be a list of two maps, got a ' .. _op_#utils#GetType(a:pair) .. ' of length ' .. string(len(a:pair))
+    endif
 endfunction
 
 function _op_#init#ExtendDefaultOpts(vargs)
@@ -63,6 +73,29 @@ function _op_#init#RegisterNoremap(map) abort
         execute 'noremap <silent> ' .. l:map_string .. ' ' .. a:map
     endif
     return "\<plug>(op#_noremap_".a:map.')'
+endfunction
+
+function _op_#init#RegisterMap(mapping_type, map) abort
+    call _op_#init#AssertSameRHS(a:map, a:mapping_type)
+
+    let l:plugmap = '<plug>(op#_'.a:mapping_type.'_'.a:map.')'
+    if !empty(maparg(l:plugmap))
+        throw 'cyclops.vim: Mapping for '.l:plugmap.' already exists.'
+    endif
+    execute a:mapping_type .. ' ' .. l:plugmap .. ' <nop>'
+
+    let l:mode = a:mapping_type ==# 'map'? '' : a:mapping_type[0]
+    let l:lhs_mapinfo = maparg(l:plugmap, l:mode, 0, 1)
+    let l:rhs_mapinfo = maparg(a:map, l:mode, 0, 1)
+    for l:key in ['lhs', 'lhsraw', 'mode']
+        if has_key(l:lhs_mapinfo, l:key)
+            let l:rhs_mapinfo[l:key] = l:lhs_mapinfo[l:key]
+        else
+            silent! remove(l:rhs_mapinfo, l:key)
+        endif
+    endfor
+    call mapset(l:rhs_mapinfo)
+    return l:plugmap
 endfunction
 
 let &cpo = s:cpo

@@ -93,6 +93,7 @@ function _op_#dot#RepeatCallback(dummy) abort
     else
         call feedkeys(_op_#op#ExprWithModifiers(l:expr, l:handle['repeat_mods'], l:handle['opts']), 'x!')
     endif
+    let &operatorfunc = '_op_#dot#RepeatCallback'
 endfunction
 
 function s:RestoreRepeatEntry(handle) abort

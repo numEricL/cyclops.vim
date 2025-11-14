@@ -10,17 +10,24 @@ let s:Log    = function('_op_#log#Log')
 let s:PModes = function('_op_#log#PModes')
 
 function _op_#utils#GetState() abort
-    let [ l:winid, l:win, l:last_undo ] = [ win_getid(), winsaveview(), undotree()['seq_cur'] ]
-    let l:v_state = _op_#utils#GetVisualState()
-    call winrestview(l:win)
-    return { 'winid': l:winid, 'win': l:win, 'last_undo': l:last_undo, 'v_state': l:v_state }
+    let l:state = {
+                \ 'winid'    : win_getid(),
+                \ 'win'      : winsaveview(),
+                \ 'bufnr'    : bufnr(),
+                \ 'undo_pos' : undotree()['seq_cur'],
+                \ 'v_state'  : _op_#utils#GetVisualState(),
+                \ }
+    return l:state
 endfunction
 
 function _op_#utils#RestoreState(state) abort
     call win_gotoid(a:state['winid'])
-    while a:state['last_undo'] < undotree()['seq_cur']
-        silent undo
-    endwhile
+
+    let l:cur_bufnr = bufnr()
+    execute 'buffer ' .. a:state['bufnr']
+    silent execute 'undo ' .. a:state['undo_pos']
+    execute 'buffer ' .. l:cur_bufnr
+
     call _op_#utils#RestoreVisualState(a:state['v_state'])
     call winrestview(a:state['win'])
 endfunction
@@ -50,6 +57,31 @@ function _op_#utils#RestoreVisualState(v_state) abort
         execute "normal! " .. l:mode
         call setpos('.', l:v_end)
         let &selectmode = l:selectmode
+    endif
+endfunction
+
+function _op_#utils#GetType(val) abort
+    let l:type = type(a:val)
+    if     l:type == v:t_number
+        return 'num'
+    elseif l:type == v:t_string
+        return 'str'
+    elseif l:type == v:t_func
+        return 'func'
+    elseif l:type == v:t_list
+        return 'list'
+    elseif l:type == v:t_dict
+        return 'dict'
+    elseif l:type == v:t_float
+        return 'float'
+    elseif l:type == v:t_bool
+        return 'bool'
+    elseif l:type == 7
+        return 'null'
+    elseif l:type == v:t_blob
+        return 'blob'
+    else
+        return 'unknown'
     endif
 endfunction
 

@@ -10,11 +10,16 @@ set cpo&vim
 silent! call _op_#init#settings#Load()
 
 let s:AssertExprMap     = function('_op_#init#AssertExprMap')
+let s:AssertPair        = function('_op_#init#AssertPair')
 let s:ExtendDefaultOpts = function('_op_#init#ExtendDefaultOpts')
 let s:StackInit         = function('_op_#op#StackInit')
 
 function pair#MapNext(pair, ...) abort range
     call s:AssertExprMap()
+    call s:AssertPair(a:pair)
+    if !empty(reg_recording()) || !empty(reg_executing())
+        return a:pair[0]
+    endif
     let l:handle = s:StackInit()
     call _op_#op#InitCallback(l:handle, 'pair', a:pair[0], s:ExtendDefaultOpts(a:000))
     call _op_#pair#Initcallback(l:handle, a:pair, 'next')
@@ -24,6 +29,10 @@ endfunction
 
 function pair#MapPrev(pair, ...) abort range
     call s:AssertExprMap()
+    call s:AssertPair(a:pair)
+    if !empty(reg_recording()) || !empty(reg_executing())
+        return a:pair[1]
+    endif
     let l:handle = s:StackInit()
     call _op_#op#InitCallback(l:handle, 'pair', a:pair[1], s:ExtendDefaultOpts(a:000))
     call _op_#pair#Initcallback(l:handle, a:pair, 'prev')
@@ -33,6 +42,10 @@ endfunction
 
 function pair#NoremapNext(pair, ...) abort range
     call s:AssertExprMap()
+    call s:AssertPair(a:pair)
+    if !empty(reg_recording()) || !empty(reg_executing())
+        return a:pair[0]
+    endif
     let l:pair = s:RegisterNoremapPair(a:pair)
     let l:handle = s:StackInit()
     call _op_#op#InitCallback(l:handle, 'pair', l:pair[0], s:ExtendDefaultOpts(a:000))
@@ -43,6 +56,10 @@ endfunction
 
 function pair#NoremapPrev(pair, ...) abort range
     call s:AssertExprMap()
+    call s:AssertPair(a:pair)
+    if !empty(reg_recording()) || !empty(reg_executing())
+        return a:pair[1]
+    endif
     let l:pair = s:RegisterNoremapPair(a:pair)
     let l:handle = s:StackInit()
     call _op_#op#InitCallback(l:handle, 'pair', l:pair[1], s:ExtendDefaultOpts(a:000))
@@ -64,37 +81,29 @@ endfunction
 
 function s:SetMap(mapping_type, pair, opts_dict) abort
     if a:mapping_type =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)'
-        execute a:mapping_type .. ' <expr> ' .. a:pair[0] .. ' pair#NoremapNext(' .. string(a:pair[0]) .. ', ' .. string(a:opts_dict) .. ')'
-        execute a:mapping_type .. ' <expr> ' .. a:pair[1] .. ' pair#NoremapPrev(' .. string(a:pair[1]) .. ', ' .. string(a:opts_dict) .. ')'
+        execute a:mapping_type .. ' <expr> ' .. a:pair[0] .. ' pair#NoremapNext(' .. string(a:pair) .. ', ' .. string(a:opts_dict) .. ')'
+        execute a:mapping_type .. ' <expr> ' .. a:pair[1] .. ' pair#NoremapPrev(' .. string(a:pair) .. ', ' .. string(a:opts_dict) .. ')'
     else
-        let l:modes = (a:mapping_type =~# '\v^(no|map)')? 'nvo' : a:mapping_type[0]
-        let l:plugpair = ['', '']
-        for l:id in range(2)
-            call _op_#init#AssertSameRHS(a:pair[l:id], l:modes)
-            let l:create_plugmap = ''
-            let l:plugpair[l:id] = '<plug>(op#_'.a:mapping_type.'_'.a:pair[l:id].')'
-            let l:mapinfo = maparg(a:pair[l:id], l:modes[0], 0, 1)
-            let l:rhs = substitute(l:mapinfo['rhs'], '\V<sid>', '<snr>'.l:mapinfo['sid'].'_', '')
-            let l:rhs = substitute(l:rhs, '\v(\|)@<!\|(\|)@!', '<bar>', 'g')
-            let l:create_plugmap .= (l:mapinfo['noremap'])? 'noremap ' : 'map '
-            let l:create_plugmap .= (l:mapinfo['buffer'])? '<buffer>' : ''
-            let l:create_plugmap .= (l:mapinfo['nowait'])? '<nowait>' : ''
-            let l:create_plugmap .= (l:mapinfo['silent'])? '<silent>' : ''
-            let l:create_plugmap .= (l:mapinfo['expr'])? '<expr>' : ''
-            let l:create_plugmap .= l:plugpair[l:id] .. ' ' .. l:rhs
-            execute l:create_plugmap
-        endfor
+        try
+            let l:plugpair = s:RegisterMapPair(a:mapping_type, a:pair)
+        catch /op#MAP_DNE/
+            echohl WarningMsg | echomsg 'cyclops.vim: Warning: Could not set mapping for pair: ' .. string(a:pair) .. ' -- one or both mappings do not exist.' | echohl None
+            return
+        endtry
         execute a:mapping_type.' <expr> '.a:pair[0].' pair#MapNext('.string(l:plugpair).', '.string(a:opts_dict).')'
         execute a:mapping_type.' <expr> '.a:pair[1].' pair#MapPrev('.string(l:plugpair).', '.string(a:opts_dict).')'
     endif
 endfunction
 
-function s:RegisterNoremapPair(pair) abort range
-    if type(a:pair) != v:t_list || len(a:pair) != 2
-        throw 'cyclops.vim: Input must be a pair of maps'
-    endif
+function s:RegisterNoremapPair(pair) abort
     let l:map0 = _op_#init#RegisterNoremap(a:pair[0])
     let l:map1 = _op_#init#RegisterNoremap(a:pair[1])
+    return [ l:map0, l:map1 ]
+endfunction
+
+function s:RegisterMapPair(mapping_type, pair) abort
+    let l:map0 = _op_#init#RegisterMap(a:mapping_type, a:pair[0])
+    let l:map1 = _op_#init#RegisterMap(a:mapping_type, a:pair[1])
     return [ l:map0, l:map1 ]
 endfunction
 

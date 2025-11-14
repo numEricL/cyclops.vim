@@ -362,9 +362,7 @@ function s:GetCharFromUser(handle) abort
         call _op_#op#Throw('cyclops.vim: unsupported hijack mode '.string(s:hijack['hmode']))
     endif
 
-    if l:char ==# "\<esc>"
-        call _op_#op#Throw('cyclops.vim: interrupt (<esc>)')
-    elseif empty(l:char)
+    if empty(l:char)
         call _op_#op#Throw('cyclops.vim: empty char received from user')
     endif
 
@@ -459,6 +457,11 @@ function s:GetCharStr(mode) abort
             call _op_#op#Throw('cyclops.vim: interrupt (<c-c>)')
         endif
     endtry
+
+    if a:mode !=# 'i' && l:char ==# "\<esc>"
+        call _op_#op#Throw('cyclops.vim: interrupt (<esc>)')
+    endif
+
     return l:char
 endfunction
 
@@ -555,28 +558,9 @@ function s:StealTypeaheadTruncated() abort
     return l:typeahead
 endfunction
 
-function _op_#op#ExprWithModifiers(expr, mods, opts, ...) abort
-    let l:op = a:0? a:1 : ''
-
-    let l:register = (a:opts['accepts_register'])? '"' .. a:mods['register'] : ''
-    let l:expr_with_modifiers = l:register .. l:op .. a:expr
-
-    if a:opts['accepts_count'] && a:mods['count1'] != 1
-        let l:expr_with_modifiers = a:mods['count1'].l:expr_with_modifiers
-    elseif !a:opts['accepts_count']
-        let l:expr_with_modifiers = repeat(l:expr_with_modifiers, a:mods['count1'])
-    endif
-
-    return l:expr_with_modifiers
-endfunction
-
 function s:StoreHandle(handle) abort
     call s:Log('StoreHandle ' .. a:handle['init']['handle_type'], '', 'expr=' .. a:handle['expr']['reduced'])
     let l:handle_to_store = deepcopy(a:handle)
-
-    " expr with modifiers stored for debugging
-    let l:expr = a:handle['expr']['reduced']
-    let l:handle_to_store['expr']['with_modifiers'] = _op_#op#ExprWithModifiers(l:expr, a:handle['mods'], a:handle['opts'], a:handle['init']['op'])
 
     if a:handle['init']['op_type'] ==# 'operand'
         " TODO: chained operand support
@@ -589,6 +573,22 @@ function s:StoreHandle(handle) abort
 
     let l:name = a:handle['init']['handle_type']
     let s:handles[l:name] = l:handle_to_store
+endfunction
+
+function _op_#op#ExprWithModifiers(expr, mods, opts, ...) abort
+    let l:op = a:0? a:1 : ''
+
+    let l:register = (a:opts['accepts_register'])? '"' .. a:mods['register'] : ''
+    let l:expr_with_modifiers = l:register .. l:op .. a:expr
+
+    if a:opts['accepts_count'] && a:mods['count1'] != 1
+        let l:expr_with_modifiers = a:mods['count1'].l:expr_with_modifiers
+    elseif !a:opts['accepts_count']
+        let l:expr_with_modifiers = repeat(l:expr_with_modifiers, a:mods['count1'])
+    endif
+    call s:Log('ExprWithModifiers', '', 'expr_with_modifiers=' .. l:expr_with_modifiers)
+
+    return l:expr_with_modifiers
 endfunction
 
 function _op_#op#Throw(...)

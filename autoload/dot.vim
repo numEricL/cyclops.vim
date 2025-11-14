@@ -14,6 +14,9 @@ let s:RegisterNoremap   = function('_op_#init#RegisterNoremap')
 
 function dot#Map(map, ...) abort range
     call s:AssertExprMap()
+        if !empty(reg_recording()) || !empty(reg_executing())
+        return a:map
+    endif
     let l:handle = s:StackInit()
     call _op_#op#InitCallback(l:handle, 'dot', a:map, s:ExtendDefaultOpts(a:000))
     call _op_#dot#InitCallback(l:handle)
@@ -24,6 +27,9 @@ endfunction
 
 function dot#Noremap(map, ...) abort range
     call s:AssertExprMap()
+    if !empty(reg_recording()) || !empty(reg_executing())
+        return a:map
+    endif
     let l:map = s:RegisterNoremap(a:map)
     let l:handle = s:StackInit()
     call _op_#op#InitCallback(l:handle, 'dot', l:map, s:ExtendDefaultOpts(a:000))
@@ -48,20 +54,12 @@ function s:SetMap(mapping_type, map, opts_dict) abort
     if a:mapping_type =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)'
         execute a:mapping_type .. ' <expr> ' .. a:map .. ' dot#Noremap(' .. string(a:map) .. ', ' .. string(a:opts_dict) .. ')'
     else
-        let l:modes = (a:mapping_type =~# '\v^(no|map)')? 'nvo' : a:mapping_type[0]
-        call _op_#init#AssertSameRHS(a:map, l:modes)
-        let l:create_plugmap = ''
-        let l:plugmap = '<plug>(op#_'.a:mapping_type.'_'.a:map.')'
-        let l:mapinfo = maparg(a:map, l:modes[0], 0, 1)
-        let l:rhs = substitute(l:mapinfo['rhs'], '\V<sid>', '<snr>'.l:mapinfo['sid'].'_', '')
-        let l:rhs = substitute(l:rhs, '\v(\|)@<!\|(\|)@!', '<bar>', 'g')
-        let l:create_plugmap .= (l:mapinfo['noremap'])? 'noremap ' : 'map '
-        let l:create_plugmap .= (l:mapinfo['buffer'])? '<buffer>' : ''
-        let l:create_plugmap .= (l:mapinfo['nowait'])? '<nowait>' : ''
-        let l:create_plugmap .= (l:mapinfo['silent'])? '<silent>' : ''
-        let l:create_plugmap .= (l:mapinfo['expr'])? '<expr>' : ''
-        let l:create_plugmap .= l:plugmap .. ' ' .. l:rhs
-        execute l:create_plugmap
+        try
+            let l:plugmap = _op_#init#RegisterMap(a:mapping_type, a:map)
+        catch /op#MAP_DNE/
+            echohl WarningMsg | echomsg 'cyclops.vim: Warning: Could not set mapping: ' .. string(a:map) .. ' -- mapping does not exist.' | echohl None
+            return
+        endtry
         execute a:mapping_type .. ' <expr> ' .. a:map .. ' dot#Map(' .. string(l:plugmap) .. ', ' .. string(a:opts_dict) .. ')'
     endif
 endfunction

@@ -6,12 +6,12 @@ if exists("g:cyclops_settings_loaded")
 endif
 let g:cyclops_settings_loaded = 1
 
-let g:cyclops_asserts_enabled             = !exists('g:cyclops_asserts_enabled')             ? 1       : g:cyclops_asserts_enabled
-let g:cyclops_max_input_size              = !exists('g:cyclops_max_input_size')              ? 1024    : g:cyclops_max_input_size
-let g:cyclops_max_trunc_esc               = !exists('g:cyclops_max_trunc_esc')               ? 10      : g:cyclops_max_trunc_esc
-let g:cyclops_no_mappings                 = !exists('g:cyclops_no_mappings')                 ? 0       : g:cyclops_no_mappings
-let g:cyclops_cursor_highlight_fallback   = !exists('g:cyclops_cursor_highlight_fallback')   ? 'Error' : g:cyclops_cursor_highlight_fallback
-let g:cyclops_debug_log_enabled           = !exists('g:cyclops_debug_log_enabled')           ? 0       : g:cyclops_debug_log_enabled
+let g:cyclops_asserts_enabled           = !exists('g:cyclops_asserts_enabled')           ? 1       : g:cyclops_asserts_enabled
+let g:cyclops_max_input_size            = !exists('g:cyclops_max_input_size')            ? 1024    : g:cyclops_max_input_size
+let g:cyclops_max_trunc_esc             = !exists('g:cyclops_max_trunc_esc')             ? 10      : g:cyclops_max_trunc_esc
+let g:cyclops_no_mappings               = !exists('g:cyclops_no_mappings')               ? 0       : g:cyclops_no_mappings
+let g:cyclops_cursor_highlight_fallback = !exists('g:cyclops_cursor_highlight_fallback') ? 'Error' : g:cyclops_cursor_highlight_fallback
+let g:cyclops_debug_log_enabled         = !exists('g:cyclops_debug_log_enabled')         ? 0       : g:cyclops_debug_log_enabled
 
 if !exists('g:cyclops_map_defaults')
     let g:cyclops_map_defaults = {
