@@ -1,108 +1,69 @@
+"
+" external dot# interface
+"
+
 let s:cpo = &cpo
 set cpo&vim
 
-silent! call op#Load()
+silent! call _op_#init#settings#Load()
 
-if !g:op#no_mappings
-    nmap   . <plug>(dot#dot)
-    nmap "". <plug>(dot#dot_default_register)
-    vmap   . <plug>(dot#visual_dot)
-    vmap "". <plug>(dot#visual_dot_default_register)
-    omap   . <plug>(dot#op_pending_dot)
-endif
-
-nmap <silent> <plug>(dot#dot) :<c-u>call <sid>DotRepeat(v:count, v:register, 'normal')<cr>
-nmap <silent> <plug>(dot#dot_default_register) :<c-u>call <sid>DotRepeat(v:count, 'use_default', 'normal')<cr>
-vmap <silent> <plug>(dot#visual_dot) :<c-u>call <sid>DotRepeat(v:count, v:register, 'visual')<cr>
-vmap <silent> <plug>(dot#visual_dot_default_register) :<c-u>call <sid>DotRepeat(v:count, 'use_default', 'visual')<cr>
-omap <silent><expr> <plug>(dot#op_pending_dot) <sid>DotOpPending()
+let s:AssertExprMap     = function('_op_#init#AssertExprMap')
+let s:ExtendDefaultOpts = function('_op_#init#ExtendDefaultOpts')
+let s:StackInit         = function('_op_#op#StackInit')
+let s:RegisterNoremap   = function('_op_#init#RegisterNoremap')
 
 function dot#Map(map, ...) abort range
-    return s:InitCallback('dot', a:map, 0, s:CheckOpts(a:000))
+    call s:AssertExprMap()
+    let l:handle = s:StackInit()
+    call _op_#op#InitCallback(l:handle, 'dot', a:map, s:ExtendDefaultOpts(a:000))
+    call _op_#dot#InitCallback(l:handle)
+    let &operatorfunc = '_op_#dot#ComputeMapCallback'
+    let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
+    return l:omap_esc .. 'g@' .. (mode(0) ==# 'n'? '_' : '')
 endfunction
 
 function dot#Noremap(map, ...) abort range
-    if empty(maparg('<plug>(op#_noremap_'.a:map.')'))
-        execute 'noremap <plug>(op#_noremap_'.a:map.') '.a:map
-    endif
-    return s:InitCallback('dot', "\<plug>(op#_noremap_".a:map.")", 0, s:CheckOpts(a:000))
+    call s:AssertExprMap()
+    let l:map = s:RegisterNoremap(a:map)
+    let l:handle = s:StackInit()
+    call _op_#op#InitCallback(l:handle, 'dot', l:map, s:ExtendDefaultOpts(a:000))
+    call _op_#dot#InitCallback(l:handle)
+    let &operatorfunc = '_op_#dot#ComputeMapCallback'
+    let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
+    return l:omap_esc .. 'g@' .. (mode(0) ==# 'n'? '_' : '')
 endfunction
 
-function dot#SetMaps(mode, maps, ...) abort range
+function dot#SetMaps(mapping_type, maps, ...) abort range
+    let l:opts_dict = a:0 ? a:1 : {}
     if type(a:maps) == v:t_list
         for l:map in a:maps
-            call s:SetMap(a:mode, l:map, a:000)
+            call s:SetMap(a:mapping_type, l:map, l:opts_dict)
         endfor
     else
-        call s:SetMap(a:mode, a:maps, a:000)
+        call s:SetMap(a:mapping_type, a:maps, l:opts_dict)
     endif
 endfunction
 
-function s:CheckOpts(opts) abort
-    execute "return ".op#SID()."CheckOpts(a:opts)"
-endfunction
-
-function s:DotRepeat(count, register, mode) abort
-    let l:handle = s:GetHandle('dot')
-    if  !empty(l:handle) && !has_key(l:handle, 'abort')
-        call s:InitRepeat(l:handle, a:count, a:register, a:mode)
-    endif
-    execute "normal! ."
-endfunction
-
-function s:DotOpPending()
-    let l:handle = s:GetHandle('dot')
-    if  !empty(l:handle) && !has_key(l:handle, 'abort') && has_key(l:handle, 'input_cache')
-        return l:handle['input_cache'][0]
+function s:SetMap(mapping_type, map, opts_dict) abort
+    if a:mapping_type =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)'
+        execute a:mapping_type .. ' <expr> ' .. a:map .. ' dot#Noremap(' .. string(a:map) .. ', ' .. string(a:opts_dict) .. ')'
     else
-        return "\<esc>"
-    endif
-endfunction
-
-function s:SetMap(mode, map, args) abort
-    let l:args = ''
-    for l:arg in a:args
-        let l:args .= ', '.(type(l:arg) =~# '\v^[06]$'? l:arg : string(l:arg))
-    endfor
-    let l:map_func = 'dot#Map'
-    let l:noremap = (a:mode =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)')
-    let l:modes = (a:mode =~# '\v^(no|map)')? 'nvo' : a:mode[0]
-    for l:mode in split(l:modes, '\zs')
-        let l:plugmap = ''
+        let l:modes = (a:mapping_type =~# '\v^(no|map)')? 'nvo' : a:mapping_type[0]
+        call _op_#init#AssertSameRHS(a:map, l:modes)
         let l:create_plugmap = ''
-        if l:noremap || empty(maparg(a:map, l:mode))
-            let l:plugmap = '<plug>(op#_noremap_'.a:map.')'
-            if a:map !~# '\v^[fFtT]$'   " see workaround_f
-                let l:create_plugmap = 'noremap <silent> '.l:plugmap.' '.a:map
-            endif
-        else
-            let l:plugmap = '<plug>(op#_'.l:mode.'map_'.a:map.')'
-            let l:mapinfo = maparg(a:map, l:mode, 0, 1)
-            let l:rhs = substitute(l:mapinfo['rhs'], '\V<sid>', '<snr>'.l:mapinfo['sid'].'_', '')
-            let l:rhs = substitute(l:rhs, '\v(\|)@<!\|(\|)@!', '<bar>', 'g')
-            let l:create_plugmap .= (l:mapinfo['noremap'])? 'noremap ' : 'map '
-            let l:create_plugmap .= (l:mapinfo['buffer'])? '<buffer>' : ''
-            let l:create_plugmap .= (l:mapinfo['nowait'])? '<nowait>' : ''
-            let l:create_plugmap .= (l:mapinfo['silent'])? '<silent>' : ''
-            let l:create_plugmap .= (l:mapinfo['expr'])? '<expr>' : ''
-            let l:create_plugmap .= l:plugmap.' '
-            let l:create_plugmap .= l:rhs
-        endif
+        let l:plugmap = '<plug>(op#_'.a:mapping_type.'_'.a:map.')'
+        let l:mapinfo = maparg(a:map, l:modes[0], 0, 1)
+        let l:rhs = substitute(l:mapinfo['rhs'], '\V<sid>', '<snr>'.l:mapinfo['sid'].'_', '')
+        let l:rhs = substitute(l:rhs, '\v(\|)@<!\|(\|)@!', '<bar>', 'g')
+        let l:create_plugmap .= (l:mapinfo['noremap'])? 'noremap ' : 'map '
+        let l:create_plugmap .= (l:mapinfo['buffer'])? '<buffer>' : ''
+        let l:create_plugmap .= (l:mapinfo['nowait'])? '<nowait>' : ''
+        let l:create_plugmap .= (l:mapinfo['silent'])? '<silent>' : ''
+        let l:create_plugmap .= (l:mapinfo['expr'])? '<expr>' : ''
+        let l:create_plugmap .= l:plugmap .. ' ' .. l:rhs
         execute l:create_plugmap
-        execute l:mode.'map <expr> '.a:map.' '.l:map_func.'('.string(l:plugmap).l:args.')'
-    endfor
-endfunction
-
-function s:InitCallback(name, expr, pair, opts) abort
-    execute "return ".op#SID()."InitCallback(a:name, a:expr, a:pair, a:opts)"
-endfunction
-
-function s:GetHandle(name) abort
-    execute "return ".op#SID()."GetHandle(a:name)"
-endfunction
-
-function s:InitRepeat(handle, count, register, mode) abort
-    execute "return ".op#SID()."InitRepeat(a:handle, a:count, a:register, a:mode)"
+        execute a:mapping_type .. ' <expr> ' .. a:map .. ' dot#Map(' .. string(l:plugmap) .. ', ' .. string(a:opts_dict) .. ')'
+    endif
 endfunction
 
 let &cpo = s:cpo

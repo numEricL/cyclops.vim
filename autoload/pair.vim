@@ -1,198 +1,102 @@
+noremap <silent> <plug>(op#_noremap_;) ;
+noremap <silent> <plug>(op#_noremap_,) ,
+"
+" external pair# interface
+"
+
 let s:cpo = &cpo
 set cpo&vim
 
-silent! call op#Load()
+silent! call _op_#init#settings#Load()
 
-if !g:op#no_mappings
-    nmap   ; <plug>(pair#next)
-    nmap ""; <plug>(pair#next_default_register)
-    vmap   ; <plug>(pair#visual_next)
-    vmap ""; <plug>(pair#visual_next_default_register)
-    omap   ; <plug>(pair#op_pending_next)
-
-    nmap   , <plug>(pair#previous)
-    nmap "", <plug>(pair#previous_default_register)
-    vmap   , <plug>(pair#visual_previous)
-    vmap "", <plug>(pair#visual_previous_default_register)
-    omap   , <plug>(pair#op_pending_previous)
-endif
-
-nmap <silent> <plug>(pair#next) :<c-u>call <sid>PairRepeat(';', v:count, v:register, 'normal')<cr>
-nmap <silent> <plug>(pair#next_default_register) :<c-u>call <sid>PairRepeat(';', v:count, 'use_default', 'normal')<cr>
-vmap <silent> <plug>(pair#visual_next) :<c-u>call <sid>PairRepeat(';', v:count, v:register, 'visual')<cr>
-vmap <silent> <plug>(pair#visual_next_default_register) :<c-u>call <sid>PairRepeat(';', v:count, 'use_default', 'visual')<cr>
-omap <silent><expr> <plug>(pair#op_pending_next) <sid>PairOpPending(';')
-
-nmap <silent> <plug>(pair#previous) :<c-u>call <sid>PairRepeat(',', v:count, v:register, 'normal')<cr>
-nmap <silent> <plug>(pair#previous_default_register) :<c-u>call <sid>PairRepeat(',', v:count, 'use_default', 'normal')<cr>
-vmap <silent> <plug>(pair#visual_previous) :<c-u>call <sid>PairRepeat(',', v:count, v:register, 'visual')<cr>
-vmap <silent> <plug>(pair#visual_previous_default_register) :<c-u>call <sid>PairRepeat(',', v:count, 'use_default', 'visual')<cr>
-omap <silent><expr> <plug>(pair#op_pending_previous) <sid>PairOpPending(',')
-
-noremap <silent> <plug>(op#_noremap_;) ;
-noremap <silent> <plug>(op#_noremap_,) ,
-
-function pair#NoremapNext(pair, ...) abort range
-    let l:opts = s:CheckOpts(a:000)
-    return s:Pair(a:pair, 1, 0, l:opts)
-endfunction
-
-function pair#NoremapPrevious(pair, ...) abort range
-    let l:opts = s:CheckOpts(a:000)
-    return s:Pair(a:pair, 1, 1, l:opts)
-endfunction
+let s:AssertExprMap     = function('_op_#init#AssertExprMap')
+let s:ExtendDefaultOpts = function('_op_#init#ExtendDefaultOpts')
+let s:StackInit         = function('_op_#op#StackInit')
 
 function pair#MapNext(pair, ...) abort range
-    let l:opts = s:CheckOpts(a:000)
-    return s:Pair(a:pair, 0, 0, l:opts)
+    call s:AssertExprMap()
+    let l:handle = s:StackInit()
+    call _op_#op#InitCallback(l:handle, 'pair', a:pair[0], s:ExtendDefaultOpts(a:000))
+    call _op_#pair#Initcallback(l:handle, a:pair, 'next')
+    let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
+    return l:omap_esc .. "\<cmd>call _op_#pair#ComputeMapCallback()\<cr>"
 endfunction
 
-function pair#MapPrevious(pair, ...) abort range
-    let l:opts = s:CheckOpts(a:000)
-    return s:Pair(a:pair, 0, 1, l:opts)
+function pair#MapPrev(pair, ...) abort range
+    call s:AssertExprMap()
+    let l:handle = s:StackInit()
+    call _op_#op#InitCallback(l:handle, 'pair', a:pair[1], s:ExtendDefaultOpts(a:000))
+    call _op_#pair#Initcallback(l:handle, a:pair, 'prev')
+    let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
+    return l:omap_esc .. "\<cmd>call _op_#pair#ComputeMapCallback()\<cr>"
 endfunction
 
-function pair#SetMaps(mode, pairs, ...) abort range
-    let l:opts = s:CheckOpts(a:000)
+function pair#NoremapNext(pair, ...) abort range
+    call s:AssertExprMap()
+    let l:pair = s:RegisterNoremapPair(a:pair)
+    let l:handle = s:StackInit()
+    call _op_#op#InitCallback(l:handle, 'pair', l:pair[0], s:ExtendDefaultOpts(a:000))
+    call _op_#pair#Initcallback(l:handle, l:pair, 'next')
+    let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
+    return l:omap_esc .. "\<cmd>call _op_#pair#ComputeMapCallback()\<cr>"
+endfunction
+
+function pair#NoremapPrev(pair, ...) abort range
+    call s:AssertExprMap()
+    let l:pair = s:RegisterNoremapPair(a:pair)
+    let l:handle = s:StackInit()
+    call _op_#op#InitCallback(l:handle, 'pair', l:pair[1], s:ExtendDefaultOpts(a:000))
+    call _op_#pair#Initcallback(l:handle, l:pair, 'prev')
+    let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
+    return l:omap_esc .. "\<cmd>call _op_#pair#ComputeMapCallback()\<cr>"
+endfunction
+
+function pair#SetMaps(mapping_type, pairs, ...) abort range
+    let l:opts_dict = a:0 ? a:1 : {}
     if type(a:pairs[0]) == v:t_list
         for l:pair in a:pairs
-            call s:SetMap(a:mode, l:pair, l:opts)
+            call s:SetMap(a:mapping_type, l:pair, l:opts_dict)
         endfor
     else
-        call s:SetMap(a:mode, a:pairs, l:opts)
+        call s:SetMap(a:mapping_type, a:pairs, l:opts_dict)
     endif
 endfunction
 
-function s:SetMap(mode, pair, opts) abort
-    let l:map_func = ['pair#MapNext', 'pair#MapPrevious']
-    let l:noremap = (a:mode =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)')
-    let l:modes = (a:mode =~# '\v^(no|map)')? 'nvo' : a:mode[0]
-    for l:mode in split(l:modes, '\zs')
+function s:SetMap(mapping_type, pair, opts_dict) abort
+    if a:mapping_type =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)'
+        execute a:mapping_type .. ' <expr> ' .. a:pair[0] .. ' pair#NoremapNext(' .. string(a:pair[0]) .. ', ' .. string(a:opts_dict) .. ')'
+        execute a:mapping_type .. ' <expr> ' .. a:pair[1] .. ' pair#NoremapPrev(' .. string(a:pair[1]) .. ', ' .. string(a:opts_dict) .. ')'
+    else
+        let l:modes = (a:mapping_type =~# '\v^(no|map)')? 'nvo' : a:mapping_type[0]
         let l:plugpair = ['', '']
-        let l:create_plugmap = ['', '']
         for l:id in range(2)
-            if l:noremap || empty(maparg(a:pair[l:id], l:mode))
-                let l:plugpair[l:id] = '<plug>(op#_noremap_'.a:pair[l:id].')'
-                if a:pair[l:id] !~# '\v^[fFtT]$'    " see workaround_f
-                    let l:create_plugmap[l:id] = 'noremap <silent> '.l:plugpair[l:id].' '.a:pair[l:id]
-                endif
-            else
-                let l:plugpair[l:id] = '<plug>(op#_'.l:mode.'map_'.a:pair[l:id].')'
-                let l:mapinfo = maparg(a:pair[l:id], l:mode, 0, 1)
-                let l:rhs = substitute(l:mapinfo['rhs'], '\V<sid>', '<snr>'.l:mapinfo['sid'].'_', '')
-                let l:rhs = substitute(l:rhs, '\v(\|)@<!\|(\|)@!', '<bar>', 'g')
-                let l:create_plugmap[l:id] .= (l:mapinfo['noremap'])? 'noremap ' : 'map '
-                let l:create_plugmap[l:id] .= (l:mapinfo['buffer'])? '<buffer>' : ''
-                let l:create_plugmap[l:id] .= (l:mapinfo['nowait'])? '<nowait>' : ''
-                let l:create_plugmap[l:id] .= (l:mapinfo['silent'])? '<silent>' : ''
-                let l:create_plugmap[l:id] .= (l:mapinfo['expr'])? '<expr>' : ''
-                let l:create_plugmap[l:id] .= l:plugpair[l:id].' '
-                let l:create_plugmap[l:id] .= l:rhs
-            endif
+            call _op_#init#AssertSameRHS(a:pair[l:id], l:modes)
+            let l:create_plugmap = ''
+            let l:plugpair[l:id] = '<plug>(op#_'.a:mapping_type.'_'.a:pair[l:id].')'
+            let l:mapinfo = maparg(a:pair[l:id], l:modes[0], 0, 1)
+            let l:rhs = substitute(l:mapinfo['rhs'], '\V<sid>', '<snr>'.l:mapinfo['sid'].'_', '')
+            let l:rhs = substitute(l:rhs, '\v(\|)@<!\|(\|)@!', '<bar>', 'g')
+            let l:create_plugmap .= (l:mapinfo['noremap'])? 'noremap ' : 'map '
+            let l:create_plugmap .= (l:mapinfo['buffer'])? '<buffer>' : ''
+            let l:create_plugmap .= (l:mapinfo['nowait'])? '<nowait>' : ''
+            let l:create_plugmap .= (l:mapinfo['silent'])? '<silent>' : ''
+            let l:create_plugmap .= (l:mapinfo['expr'])? '<expr>' : ''
+            let l:create_plugmap .= l:plugpair[l:id] .. ' ' .. l:rhs
+            execute l:create_plugmap
         endfor
-        for l:id in range(2)
-            execute l:create_plugmap[l:id]
-            execute l:mode.'map <expr> '.a:pair[l:id].' '.l:map_func[l:id].'('.string(l:plugpair).', '.string(a:opts).')'
-        endfor
-    endfor
+        execute a:mapping_type.' <expr> '.a:pair[0].' pair#MapNext('.string(l:plugpair).', '.string(a:opts_dict).')'
+        execute a:mapping_type.' <expr> '.a:pair[1].' pair#MapPrev('.string(l:plugpair).', '.string(a:opts_dict).')'
+    endif
 endfunction
 
-function s:Pair(pair, noremap, id, opts) abort range
+function s:RegisterNoremapPair(pair) abort range
     if type(a:pair) != v:t_list || len(a:pair) != 2
         throw 'cyclops.vim: Input must be a pair of maps'
     endif
-    if a:noremap && ( empty(maparg('<plug>(op#_noremap_'.a:pair[0].')')) || empty(maparg('<plug>(op#_noremap_'.a:pair[1].')')) )
-        execute 'noremap <plug>(op#_noremap_'.a:pair[0].') '.a:pair[0]
-        execute 'noremap <plug>(op#_noremap_'.a:pair[1].') '.a:pair[1]
-    endif
-    let l:pair = a:noremap? [ "\<plug>(op#_noremap_".a:pair[0].')', "\<plug>(op#_noremap_".a:pair[1].')' ] : a:pair
-    return s:InitCallback('pair', a:id, l:pair, a:opts)
+    let l:map0 = _op_#init#RegisterNoremap(a:pair[0])
+    let l:map1 = _op_#init#RegisterNoremap(a:pair[1])
+    return [ l:map0, l:map1 ]
 endfunction
-
-function s:PairRepeat(direction, count, register, mode) abort
-    let l:handle = s:GetHandle('pair')
-    if has_key(l:handle, 'abort') || empty(l:handle)
-        return
-    endif
-    if l:handle['expr'] =~# '\V\^'."\<plug>".'(op#_noremap_\[fFtT;,])'
-        " workaround for cpo-;
-        let l:handle['expr'] = (a:direction ==# ';')? "\<plug>(op#_noremap_;)" : "\<plug>(op#_noremap_,)"
-        call s:InitRepeat(l:handle, a:count, a:register, a:mode)
-        call s:Callback('', 'pair')
-        return
-    endif
-
-    let l:old_id = l:handle['pair_id']
-    let l:id = (a:direction ==# ';')? l:old_id : !l:old_id
-    if l:handle['pair_state'][l:id] ==# 'valid'
-        call extend(l:handle, {'pair_id': l:id, 'expr': l:handle['pair'][l:id]})
-        call s:InitRepeat(l:handle, a:count, a:register, a:mode)
-        call s:Callback('', 'pair')
-        let l:handle['pair_id'] = l:old_id
-    else
-        execute "let l:stack = ".op#SID()."StartStack()"
-        call extend(l:stack, { 'name': 'pair', 'expr': l:handle['pair'][l:id], 'pair': deepcopy(l:handle['pair']) })
-        call extend(l:stack, { 'accepts_count': l:handle['accepts_count'], 'accepts_register': l:handle['accepts_register'] })
-        call extend(l:stack, { 'shift_marks': l:handle['shift_marks'], 'visual_motion': l:handle['visual_motion'] })
-        call extend(l:stack, { 'input_cache': get(l:handle, 'input_cache', []), 'input_source': 'input_cache', 'pair_id': l:id })
-        call extend(l:stack, { 'pair_state': l:handle['pair_state'], 'expr_so_far': '', 'register_default': l:handle['register_default'] })
-        call s:InitRepeat(l:stack, a:count, a:register, a:mode)
-        call extend(l:stack, { 'called_from': 'repeat initialization' })
-        call s:Callback('', 'stack')
-    endif
-endfunction
-
-function s:PairOpPending(direction)
-    let l:handle = s:GetHandle('pair')
-    if empty(l:handle) || has_key(l:handle, 'abort')
-        return "\<esc>"
-    else
-        let l:old_id = l:handle['pair_id']
-        let l:id = (a:direction ==# ';')? l:old_id : !l:old_id
-        if l:handle['pair_state'][l:id] ==# 'valid'
-            if mode(1) ==# 'no'
-                let l:op_mode = ( l:handle['cur_start'][1] == l:handle['cur_end'][1] )? '' : 'V'
-            else
-                let l:op_mode = a:handle['entry_mode'][2]
-            endif
-            return l:op_mode.l:handle['pair'][l:id]
-        else
-            execute "let l:stack = ".op#SID()."StartStack()"
-            call extend(l:stack, { 'name': 'pair', 'expr': l:handle['pair'][l:id], 'pair': deepcopy(l:handle['pair']) })
-            call extend(l:stack, { 'accepts_count': l:handle['accepts_count'], 'accepts_register': l:handle['accepts_register'] })
-            call extend(l:stack, { 'shift_marks': l:handle['shift_marks'], 'visual_motion': l:handle['visual_motion'] })
-            call extend(l:stack, { 'input_cache': get(l:handle, 'input_cache', []), 'input_source': 'input_cache', 'pair_id': l:id })
-            call extend(l:stack, { 'pair_state': l:handle['pair_state'], 'expr_so_far': '', 'register_default': l:handle['register_default'] })
-            call extend(l:stack, { 'cur_start': getcurpos() })
-            call extend(l:stack, { 'called_from': 'repeat initialization', 'operator': v:operator, 'entry_mode': mode(1), 'count1': 1 })
-            return "\<esc>:call ".op#SID()."Callback(".string('').', '.string('stack').")\<cr>"
-        endif
-    endif
-endfunction
-
-function s:CheckOpts(opts) abort
-    execute "return ".op#SID()."CheckOpts(a:opts)"
-endfunction
-
-function s:InitCallback(name, expr, pair, opts) abort
-    execute "return ".op#SID()."InitCallback(a:name, a:expr, a:pair, a:opts)"
-endfunction
-
-function s:Callback(dummy, name) abort
-    execute "return ".op#SID()."Callback('', a:name)"
-endfunction
-
-function s:GetHandle(name) abort
-    execute "return ".op#SID()."GetHandle(a:name)"
-endfunction
-
-function s:InitRepeat(handle, count, register, mode) abort
-    execute "return ".op#SID()."InitRepeat(a:handle, a:count, a:register, a:mode)"
-endfunction
-
-if !g:op#no_mappings
-    call pair#SetMaps('noremap', [['f', 'F'], ['t', 'T']])
-endif
 
 let &cpo = s:cpo
 unlet s:cpo
