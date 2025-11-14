@@ -55,9 +55,8 @@ function _op_#dot#RepeatMap() abort
     call _op_#init#AssertExprMap()
     let l:handle = _op_#op#GetStoredHandle('dot')
 
-    " do nothing
     if empty(l:handle) || (mode(0) =~# '\v^[vV]$' && l:handle['init']['mode'] ==# 'n')
-        return ''
+        return '.'
     endif
 
     call _op_#dot#InitRepeatCallback(l:handle)
