@@ -17,7 +17,6 @@ if !exists('g:cyclops_map_defaults')
     let g:cyclops_map_defaults = {
                 \ 'accepts_count': 1,
                 \ 'accepts_register': 1,
-                \ 'visual_motion': 0,
                 \ 'consumes_typeahead': 0,
                 \ 'silent': 1,
                 \ }

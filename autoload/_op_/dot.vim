@@ -73,7 +73,6 @@ endfunction
 "     endif
 " endfunction
 
-
 function _op_#dot#InitRepeatCallback(handle) abort
     call extend(a:handle, { 'repeat' : {
                 \ 'mode'     : mode(1),
@@ -99,7 +98,6 @@ endfunction
 function s:RestoreRepeatEntry(handle) abort
     let l:imode = a:handle['dot']['mode']
     let l:rmode = a:handle['repeat']['mode']
-    " echom 'imode=' . l:imode . ' rmode=' . l:rmode . ' mode(1)=' . mode(1)
 
     " if initiated in operator-pending mode then treat like normal mode
     let l:init_repeat = v:false
@@ -113,8 +111,6 @@ function s:RestoreRepeatEntry(handle) abort
         call setpos('.', l:v_beg)
         execute "normal! " .. a:handle['dot']['mode']
         call setpos('.', l:v_end)
-        " echom 'v_beg=' . string(l:v_beg) . ' v_end=' . string(l:v_end)
-        " echom 'mode(1)=' . mode(1) .. " '< = " . string(getpos("'<")) .. " '> = " . string(getpos("'>")) .. " '[ = " . string(getpos("'[")) .. " '] = " . string(getpos("']"))
         let l:init_repeat = v:true
     elseif l:imode =~# '\v^[vV]$' && l:rmode =~# '\v^[vV]$'
         let l:selectmode = &selectmode | set selectmode=

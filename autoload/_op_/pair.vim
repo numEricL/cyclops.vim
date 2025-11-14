@@ -26,7 +26,6 @@ function _op_#pair#PairRepeatMap(dir) abort
     call _op_#init#AssertExprMap()
     let l:stored_handle = _op_#op#GetStoredHandle('pair')
 
-    " do nothing
     if empty(l:stored_handle)
         return ''
     endif
@@ -75,35 +74,6 @@ function _op_#pair#RepeatCallback() abort
         call feedkeys(_op_#op#ExprWithModifiers(l:expr, l:handle['repeat_mods'], l:handle['opts']), 'x!')
     endif
 endfunction
-
-" function s:PairOpPending(direction)
-"     let l:handle = s:GetHandle('pair')
-"     if empty(l:handle) || has_key(l:handle, 'abort')
-"         return "\<esc>"
-"     else
-"         let l:old_id = l:handle['pair_id']
-"         let l:id = (a:direction ==# ';')? l:old_id : !l:old_id
-"         if l:handle['pair_state'][l:id] ==# 'valid'
-"             if mode(1) ==# 'no'
-"                 let l:op_mode = ( l:handle['cur_start'][1] == l:handle['cur_end'][1] )? '' : 'V'
-"             else
-"                 let l:op_mode = a:handle['entry_mode'][2]
-"             endif
-"             return l:op_mode.l:handle['pair'][l:id]
-"         else
-"             call _op_#stack#Init()
-"             let l:top_handle = _op_#stack#Top()
-"             call extend(l:top_handle, { 'handle_type': 'pair', 'expr': l:handle['pair'][l:id], 'pair': deepcopy(l:handle['pair']) })
-"             call extend(l:top_handle, { 'accepts_count': l:handle['accepts_count'], 'accepts_register': l:handle['accepts_register'] })
-"             call extend(l:top_handle, { 'shift_marks': l:handle['shift_marks'], 'visual_motion': l:handle['visual_motion'] })
-"             call extend(l:top_handle, { 'input_cache': get(l:handle, 'input_cache', []), 'input_source': 'input_cache', 'pair_id': l:id })
-"             call extend(l:top_handle, { 'pair_state': l:handle['pair_state'], 'expr_so_far': ''})
-"             call extend(l:top_handle, { 'cur_start': getcurpos() })
-"             call extend(l:top_handle, { 'operator': v:operator, 'entry_mode': mode(1), 'count1': 1 })
-"             return "\<esc>:call ".op#SID()."Callback(".string('').', '.string('init').")\<cr>"
-"         endif
-"     endif
-" endfunction
 
 let &cpo = s:cpo
 unlet s:cpo

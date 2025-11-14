@@ -3,10 +3,8 @@
 "
 
 "TODO: enable chained operand support (refactor s:inputs, operand expr reduction)
-"TODO: silent on repeat
 "TODO: operator pending mode for dot/pair repeat
 "TODO: pair repeat with different modes?
-"TODO: opts for: shift_marks, visual_motion
 "TODO: use neovim virtual text instead of actual insertion during HijackInput
 
 let s:cpo = &cpo
