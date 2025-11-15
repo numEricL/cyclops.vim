@@ -1,14 +1,35 @@
+" ============================================================================
+" File: autoload/_op_/utils.vim
+" Description: Utility functions for state management
+" ============================================================================
+"
+" This module provides utilities for capturing and restoring editor state,
+" particularly window position, buffer state, undo position, and visual mode.
+" These are critical for the "probe" mechanism that tests operators without
+" side effects.
+"
+" ============================================================================
+
 let s:cpo = &cpo
 set cpo&vim
 
 silent! call _op_#init#settings#Load()
 
-" internal utils
-
+" Import logging functions
 let s:Pad    = function('_op_#log#Pad')
 let s:Log    = function('_op_#log#Log')
 let s:PModes = function('_op_#log#PModes')
 
+" _op_#utils#GetState - Capture current editor state
+"
+" Returns a dictionary containing:
+"   winid    - Window ID
+"   win      - Window view (cursor, topline, etc.)
+"   bufnr    - Buffer number
+"   undo_pos - Current position in undo tree
+"   v_state  - Visual mode state
+"
+" Used before probe operations to enable full state restoration.
 function _op_#utils#GetState() abort
     let l:state = {
                 \ 'winid'    : win_getid(),

@@ -126,7 +126,7 @@ function s:RestoreRepeatEntry(handle) abort
 endfunction
 
 " point, v_beg, v_end are position as returned by getpos(). If inputs are
-" thought of as vectors, this function returns the vector 
+" thought of as vectors, this function returns the vector
 " point + (v_end - v_beg)
 function s:ShiftPos(point, v_beg, v_end) abort
     let l:shifted_row = a:point[1] + ( a:v_end[1] - a:v_beg[1] )
