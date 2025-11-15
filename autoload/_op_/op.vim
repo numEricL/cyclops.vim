@@ -56,7 +56,7 @@ endfunction
 
 function _op_#op#InitCallback(handle, handle_type, expr, opts) abort
     if mode(1) !~# '\v^(n|v|V||no|nov|noV|no)$'
-        throw 'cyclops.vim: Entry mode '.string(mode(1)).' not yet supported.'
+        throw 'cyclops.vim: Entry mode ' .. string(mode(1)) .. ' not yet supported.'
     endif
 
     call extend(a:handle, { 'init' : {
@@ -101,9 +101,9 @@ function _op_#op#ComputeMapCallback() abort range
         let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:handle['mods'], l:handle['opts'], l:handle['init']['op'])
         call s:Log('EXIT', s:PModes(0), 'FEED_tx!=' .. l:expr_with_modifiers .. s:ambiguous_map_chars)
         if l:handle['opts']['silent']
-            silent call feedkeys(l:expr_with_modifiers .. s:ambiguous_map_chars, 'tx!')
+            silent call feedkeys(l:expr_with_modifiers .. s:ambiguous_map_chars, 'x!')
         else
-            call feedkeys(l:expr_with_modifiers .. s:ambiguous_map_chars, 'tx!')
+            call feedkeys(l:expr_with_modifiers .. s:ambiguous_map_chars, 'x!')
         endif
         call _op_#stack#Pop(0, 'StackInit')
     endif
@@ -137,7 +137,7 @@ function s:ComputeMapOnStack(handle) abort
         call s:ParentCallUpdate(a:handle)
 
         call s:Log('ComputeMapOnStack', 'EXIT', 'FEED_tx!=' .. a:handle['init']['op'] .. a:handle['expr']['reduced'])
-        silent call feedkeys(a:handle['init']['op'] .. a:handle['expr']['reduced'], 'tx!')
+        silent call feedkeys(a:handle['init']['op'] .. a:handle['expr']['reduced'], 'x!')
         call inputrestore()
     endif
 endfunction
@@ -359,7 +359,7 @@ function s:GetCharFromUser(handle) abort
     elseif s:hijack['hmode'] =~# '\v^(c|c-l)$'
         let l:char = s:GetCharFromUser_c(a:handle)
     else
-        call _op_#op#Throw('cyclops.vim: unsupported hijack mode '.string(s:hijack['hmode']))
+        call _op_#op#Throw('cyclops.vim: unsupported hijack mode ' .. string(s:hijack['hmode']))
     endif
 
     if empty(l:char)
@@ -377,9 +377,9 @@ function s:GetCharFromUser_i(handle) abort
         " update buffer if waiting for user input
         if !getchar(1)
             call s:Log('GetCharFromUser_i', s:PModes(0), 'FEED_tx=' .. a:handle['expr']['reduced'] .. s:input_stream)
-            silent call feedkeys(a:handle['expr']['reduced'] .. s:input_stream, 'tx')
+            silent call feedkeys(a:handle['expr']['reduced'] .. s:input_stream, 'x')
             let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
-            call add(l:match_ids, matchadd(l:cursor_hl, '\%'.line('.').'l\%'.(col('.')+1).'c'))
+            call add(l:match_ids, matchadd(l:cursor_hl, '\%' .. line('.') .. 'l\%' .. (col('.')+1) .. 'c'))
             redraw
         endif
         let l:char = s:GetCharStr('i')
@@ -401,13 +401,13 @@ function s:GetCharFromUser_no(handle) abort
         let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
         if a:handle['init']['mode'] =~# '\v^[vV]$'
             if a:handle['init']['mode'] =~# '\v^[vV]$'
-                call add(l:match_ids, matchadd('Visual', '\m\%>'."'".'<\&\%<'."'".'>\&[^$]'))
-                call add(l:match_ids, matchadd('Visual', '\m\%'."'".'<\|\%'."'".'>'))
+                call add(l:match_ids, matchadd('Visual', '\m\%>' .. "'" .. '<\&\%<' .. "'" .. '>\&[^$]'))
+                call add(l:match_ids, matchadd('Visual', '\m\%' .. "'" .. '<\|\%' .. "'" .. '>'))
             else
                 " TODO  mode
             endif
         endif
-        call add(l:match_ids, matchadd(l:cursor_hl, '\%'.line('.').'l\%'.col('.').'c'))
+        call add(l:match_ids, matchadd(l:cursor_hl, '\%' .. line('.') .. 'l\%' .. col('.') .. 'c'))
         redraw
     endif
 
@@ -432,7 +432,7 @@ function s:GetCharFromUser_c(handle) abort
         let l:input = (s:hijack['cmd_type'] == s:input_stream[0])? s:input_stream[1:] : s:input_stream
         if s:hijack['cmd_type'] =~# '\v[/?]' && &incsearch
             nohlsearch
-            call add(l:match_ids, matchadd(l:cursor_hl, '\%'.line('.').'l\%'.col('.').'c'))
+            call add(l:match_ids, matchadd(l:cursor_hl, '\%' .. line('.') .. 'l\%' .. col('.') .. 'c'))
             silent! call add(l:match_ids, matchadd('IncSearch', l:input))
         endif
         redraw
@@ -485,15 +485,15 @@ function s:GetCharFromTypeahead(handle) abort
 
     " traverse stack to find available typeahead (if any)
     let [ l:handle, l:parent_handle ] = [ a:handle, _op_#stack#GetPrev(a:handle) ]
-    let l:parent_typeahead = matchstr(l:parent_handle['expr']['reduced'], '\V'.l:handle['parent_call'].'\zs\.\*')
+    let l:parent_typeahead = matchstr(l:parent_handle['expr']['reduced'], '\V' .. l:handle['parent_call'] .. '\zs\.\*')
     while l:handle['stack']['level'] > 0 && empty(l:parent_typeahead)
         let [ l:handle, l:parent_handle ] = [ _op_#stack#GetPrev(l:handle), _op_#stack#GetPrev(l:parent_handle) ]
-        let l:parent_typeahead = matchstr(l:parent_handle['expr']['reduced'], '\V'.l:handle['parent_call'].'\zs\.\*')
+        let l:parent_typeahead = matchstr(l:parent_handle['expr']['reduced'], '\V' .. l:handle['parent_call'] .. '\zs\.\*')
     endwhile
 
     " consume from parent typeahead if available
     if !empty(l:parent_typeahead)
-        let l:parent_handle['expr']['reduced'] = matchstr(l:parent_handle['expr']['reduced'], '\V\^\.\{-}'.l:handle['parent_call']).strcharpart(l:parent_typeahead, 1)
+        let l:parent_handle['expr']['reduced'] = matchstr(l:parent_handle['expr']['reduced'], '\V\^\.\{-}' .. l:handle['parent_call']) .. strcharpart(l:parent_typeahead, 1)
         if  !empty(l:nr) && ( l:char !=# strcharpart(l:parent_typeahead, 0, 1) )
             call _op_#op#Throw('cyclops.vim: Typeahead mismatch while processing operator')
         endif
@@ -536,7 +536,7 @@ function s:StealTypeahead() abort
         let l:typeahead ..= l:char
         if strchars(l:typeahead) > g:cyclops_max_input_size
             call s:Log('STEALTYPEAHEAD', '', 'TYPEAHEAD OVERFLOW')
-            call s:Log('', '', l:typeahead[0:30].'...')
+            call s:Log('', '', l:typeahead[0:30] .. '...')
             call _op_#op#Throw('cyclops.vim: Typeahead overflow while reading typeahead (incomplete command called in normal mode?)')
         endif
     endwhile
@@ -582,7 +582,7 @@ function _op_#op#ExprWithModifiers(expr, mods, opts, ...) abort
     let l:expr_with_modifiers = l:register .. l:op .. a:expr
 
     if a:opts['accepts_count'] && a:mods['count1'] != 1
-        let l:expr_with_modifiers = a:mods['count1'].l:expr_with_modifiers
+        let l:expr_with_modifiers = a:mods['count1'] .. l:expr_with_modifiers
     elseif !a:opts['accepts_count']
         let l:expr_with_modifiers = repeat(l:expr_with_modifiers, a:mods['count1'])
     endif
@@ -608,25 +608,6 @@ endfunction
 " only used for logging
 function _op_#op#GetLastHijackMode() abort
     return s:hijack['hmode']
-endfunction
-
-noremap <plug>(op#_noremap_f) f
-noremap <plug>(op#_noremap_F) F
-noremap <plug>(op#_noremap_t) t
-noremap <plug>(op#_noremap_T) T
-omap <plug>(op#_noremap_f) <plug>(op#_workaround_f)
-omap <plug>(op#_noremap_F) <plug>(op#_workaround_F)
-omap <plug>(op#_noremap_t) <plug>(op#_workaround_t)
-omap <plug>(op#_noremap_T) <plug>(op#_workaround_T)
-onoremap <expr> <plug>(op#_workaround_f) <sid>Workaround_f('f')
-onoremap <expr> <plug>(op#_workaround_F) <sid>Workaround_f('F')
-onoremap <expr> <plug>(op#_workaround_t) <sid>Workaround_f('t')
-onoremap <expr> <plug>(op#_workaround_T) <sid>Workaround_f('T')
-
-let s:workaround_f = 0
-function s:Workaround_f(char)
-    let s:workaround_f = 1
-    return a:char
 endfunction
 
 let &cpo = s:cpo

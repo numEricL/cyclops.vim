@@ -10,8 +10,8 @@ let s:debug_log = []
 let s:Pad = function('_op_#log#Pad')
 
 function _op_#log#PrintScriptVars() abort range
-    for l:line in execute('let g:')->split("\n")->filter('v:val =~# '.string('\v^op#'))->sort()
-        echomsg 'g:'.l:line
+    for l:line in execute('let g:')->split("\n")->filter('v:val =~# ' .. string('\v^op#'))->sort()
+        echomsg 'g:' .. l:line
     endfor
     for l:handle in _op_#stack#GetStack()
         if len(l:handle) == 1 && has_key(l:handle, 'stack')
@@ -23,12 +23,12 @@ function _op_#log#PrintScriptVars() abort range
     for [ l:handle_type, l:handle ] in items(_op_#op#GetHandles())
         if !empty(l:handle)
             echomsg ' '
-            call s:PrintDict(l:handle, '['.l:handle_type.']')
+            call s:PrintDict(l:handle, '[' .. l:handle_type .. ']')
         endif
     endfor
     if !empty(_op_#stack#GetException())
         echomsg ' '
-        echomsg 'stack exception: ' . _op_#stack#GetException()
+        echomsg 'stack exception: ' .. _op_#stack#GetException()
         echomsg _op_#stack#GetThrowpoint()
     endif
     echomsg ' '
@@ -61,7 +61,7 @@ endfunction
 function _op_#log#Pad(value, length) abort
     let l:pad_len = a:length - strdisplaywidth(a:value)
     let l:pad = (l:pad_len > 0)? repeat(' ', l:pad_len) : ''
-    return a:value . l:pad
+    return a:value .. l:pad
 endfunction
 
 function _op_#log#PModes(kind) abort
@@ -89,11 +89,11 @@ function _op_#log#InitDebugLog() abort
 endfunction
 
 function s:PrintDict(dict, prefix) abort
-    let l:stack_prefix = has_key(a:dict, 'stack') ? '[stack' . a:dict['stack']['level'] . ']' : ''
+    let l:stack_prefix = has_key(a:dict, 'stack') ? '[stack' .. a:dict['stack']['level'] .. ']' : ''
     let l:prefix = l:stack_prefix .. a:prefix
     for l:key in a:dict->keys()->sort()
         if type(a:dict[l:key]) == v:t_dict
-            call s:PrintDict(a:dict[l:key], l:prefix.'['.l:key.']')
+            call s:PrintDict(a:dict[l:key], l:prefix .. '[' .. l:key .. ']')
             continue
         endif
         let l:value = s:FormatValue( l:key, a:dict[l:key] )
@@ -110,7 +110,7 @@ function s:FormatValue(key, value) abort
     endif
 
     if a:key ==# 'inputs'
-        let l:value = '[' . join(l:value, ', ') . ']'
+        let l:value = '[' .. join(l:value, ', ') .. ']'
     endif
     return l:value
 endfunction
@@ -128,7 +128,7 @@ function s:ToPrintable(value) abort
     let l:output = ''
     for l:char in split(l:value, '\zs')
         let l:nr = char2nr(l:char)
-        let l:output .= (l:nr < 32)? l:ctrl_names[l:nr] : l:char
+        let l:output ..= (l:nr < 32)? l:ctrl_names[l:nr] : l:char
     endfor
     return l:output
 endfunction

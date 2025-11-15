@@ -37,7 +37,7 @@ function _op_#init#AssertSameRHS(map, mapping_type) abort
 
     for l:next_mode in l:mode_list[1:]
         if l:first_rhs !=# maparg(a:map, l:next_mode)
-            throw 'cyclops.vim: Assertion failed: Mapped keys in different modes must have the same RHS: '.a:map
+            throw 'cyclops.vim: Assertion failed: Mapped keys in different modes must have the same RHS: ' .. a:map
         endif
     endfor
 endfunction
@@ -58,36 +58,36 @@ function _op_#init#ExtendDefaultOpts(vargs)
     let l:opts = len(a:vargs) == 1 ? a:vargs[0] : {}
     for [l:key, l:value] in items(l:opts)
         if !has_key(g:cyclops_map_defaults, l:key)
-            throw 'cyclops.vim: Unrecognized option '.string(l:key).'.'
+            throw 'cyclops.vim: Unrecognized option ' .. string(l:key) .. '.'
         endif
         if l:value != v:true && l:value != v:false
-            throw 'cyclops.vim: Unrecognied option value '.string(l:key).': '.string(l:value).'. Values must be 0 or 1.'
+            throw 'cyclops.vim: Unrecognied option value ' .. string(l:key) .. ': ' .. string(l:value) .. '. Values must be 0 or 1.'
         endif
     endfor
     return extend(l:opts, g:cyclops_map_defaults, 'keep')
 endfunction
 
 function _op_#init#RegisterNoremap(map) abort
-    let l:map_string = '<plug>(op#_noremap_'.a:map.')'
+    let l:map_string = '<plug>(op#_noremap_' .. a:map .. ')'
     if empty(maparg(l:map_string))
         execute 'noremap <silent> ' .. l:map_string .. ' ' .. a:map
     endif
-    return "\<plug>(op#_noremap_".a:map.')'
+    return "\<plug>(op#_noremap_" .. a:map .. ')'
 endfunction
 
 function _op_#init#RegisterMap(mapping_type, map) abort
     call _op_#init#AssertSameRHS(a:map, a:mapping_type)
 
-    let l:plugmap = '<plug>(op#_'.a:mapping_type.'_'.a:map.')'
+    let l:plugmap = '<plug>(op#_' .. a:mapping_type .. '_' .. a:map .. ')'
     if !empty(maparg(l:plugmap))
-        throw 'cyclops.vim: Mapping for '.l:plugmap.' already exists.'
+        throw 'cyclops.vim: Mapping for ' .. l:plugmap .. ' already exists.'
     endif
     execute a:mapping_type .. ' ' .. l:plugmap .. ' <nop>'
 
     let l:mode = a:mapping_type ==# 'map'? '' : a:mapping_type[0]
     let l:lhs_mapinfo = maparg(l:plugmap, l:mode, 0, 1)
     let l:rhs_mapinfo = maparg(a:map, l:mode, 0, 1)
-    for l:key in ['lhs', 'lhsraw', 'mode']
+    for l:key in ['lhs', 'lhsraw', 'lhsrawalt', 'mode']
         if has_key(l:lhs_mapinfo, l:key)
             let l:rhs_mapinfo[l:key] = l:lhs_mapinfo[l:key]
         else

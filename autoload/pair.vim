@@ -90,8 +90,8 @@ function s:SetMap(mapping_type, pair, opts_dict) abort
             echohl WarningMsg | echomsg 'cyclops.vim: Warning: Could not set mapping for pair: ' .. string(a:pair) .. ' -- one or both mappings do not exist.' | echohl None
             return
         endtry
-        execute a:mapping_type.' <expr> '.a:pair[0].' pair#MapNext('.string(l:plugpair).', '.string(a:opts_dict).')'
-        execute a:mapping_type.' <expr> '.a:pair[1].' pair#MapPrev('.string(l:plugpair).', '.string(a:opts_dict).')'
+        execute a:mapping_type .. ' <expr> ' .. a:pair[0] .. ' pair#MapNext(' .. string(l:plugpair) .. ', ' .. string(a:opts_dict) .. ')'
+        execute a:mapping_type .. ' <expr> ' .. a:pair[1] .. ' pair#MapPrev(' .. string(l:plugpair) .. ', ' .. string(a:opts_dict) .. ')'
     endif
 endfunction
 

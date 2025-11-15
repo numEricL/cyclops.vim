@@ -60,7 +60,7 @@ function _op_#dot#RepeatMap() abort
     elseif mode(0) =~# '\v^[vV]$'
         return "\<esc>."
     else
-        throw 'cyclops.vim: unimplemented mode: ' . mode(1)
+        throw 'cyclops.vim: unimplemented mode: ' .. mode(1)
     endif
 endfunction
 
