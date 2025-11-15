@@ -12,6 +12,7 @@ let g:cyclops_max_trunc_esc             = !exists('g:cyclops_max_trunc_esc')    
 let g:cyclops_no_mappings               = !exists('g:cyclops_no_mappings')               ? 0       : g:cyclops_no_mappings
 let g:cyclops_cursor_highlight_fallback = !exists('g:cyclops_cursor_highlight_fallback') ? 'Error' : g:cyclops_cursor_highlight_fallback
 let g:cyclops_debug_log_enabled         = !exists('g:cyclops_debug_log_enabled')         ? 0       : g:cyclops_debug_log_enabled
+let g:cyclops_persistent_count          = !exists('g:cyclops_persistent_count')          ? 0       : g:cyclops_persistent_count
 
 if !exists('g:cyclops_map_defaults')
     let g:cyclops_map_defaults = {

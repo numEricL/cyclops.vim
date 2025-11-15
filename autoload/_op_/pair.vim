@@ -42,6 +42,7 @@ function _op_#pair#PairRepeatMap(dir) abort
         let l:stack_handle['pair'] = l:stored_handle['pair']
         let l:stack_handle['pair']['id'] = l:id
         let l:stack_handle['repeat'] = l:stored_handle['repeat']
+        let l:stack_handle['mods'] = l:stored_handle['repeat_mods']
         return "\<cmd>call _op_#pair#ComputeMapCallback()\<cr>"
     else
         return "\<cmd>call _op_#pair#RepeatCallback()\<cr>"
@@ -52,6 +53,12 @@ function _op_#pair#InitRepeatCallback(handle, dir) abort
     " store original direction, needed for determining ; , direction
     let l:init_id = has_key(a:handle, 'repeat')? a:handle['repeat']['init_id'] : a:handle['pair']['id']
     let l:id = (a:dir ==# 'next')? l:init_id : !l:init_id
+    if (g:cyclops_persistent_count && v:count == 0)
+        let l:init_count1 = has_key(a:handle, 'mods')? a:handle['mods']['count1'] : 1
+        let l:count1 = has_key(a:handle, 'repeat_mods')? a:handle['repeat_mods']['count1'] : l:init_count1
+    else 
+        let l:count1 = v:count1
+    endif
 
     call extend(a:handle, { 'repeat' : {
                 \ 'init_id' : l:init_id,
@@ -59,7 +66,7 @@ function _op_#pair#InitRepeatCallback(handle, dir) abort
                 \ 'mode'    : mode(1),
                 \ } } )
     call extend(a:handle, { 'repeat_mods': {
-                \ 'count1'    : v:count1,
+                \ 'count1'    : l:count1,
                 \ 'register' : v:register,
                 \ } } )
 endfunction
