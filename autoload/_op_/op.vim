@@ -2,10 +2,21 @@
 " internal op# interface
 "
 
-"TODO: enable chained operand support (refactor s:inputs, operand expr reduction)
-"TODO: operator pending mode for dot/pair repeat
-"TODO: pair repeat with different modes?
-"TODO: use neovim virtual text instead of actual insertion during HijackInput
+" TODO: performance: the final execution of modifiers with keys is usually
+"   unnecessary, removing it would greatly improve perceived sluggishness
+" TODO: improve REPL by removing unnecessary repeated execution
+" TODO: provide command line prompt when in insert mode, --INSERT (operator)--
+" TODO: fix insert highlight in first col
+" TODO: operators should store input from different modes separately, then .
+"   used in operator pending mode can insert a motion from the last operator. E.g.
+"   if 'c' is a dot operator then 'ciwfoo' should store ['iw', 'foo'] and then
+"   'c.' should be equivalent to 'ciw'.
+" TODO: ; and , should store the last count and use that for repeat unless a new
+"   count is provided.
+" TODO: enable chained operand support (refactor s:inputs, operand expr reduction)
+" TODO: operator pending mode for dot/pair repeat
+" TODO: pair repeat with different modes?
+" TODO: use neovim virtual text instead of actual insertion during HijackInput
 
 let s:cpo = &cpo
 set cpo&vim
