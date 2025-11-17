@@ -2,17 +2,12 @@
 " internal op# interface
 "
 
-" TODO: performance: the final execution of modifiers with keys is usually
-"   unnecessary, removing it would greatly improve perceived sluggishness
-" TODO: improve REPL by removing unnecessary repeated execution
 " TODO: provide command line prompt when in insert mode, --INSERT (operator)--
 " TODO: fix insert highlight in first col
 " TODO: operators should store input from different modes separately, then .
 "   used in operator pending mode can insert a motion from the last operator. E.g.
 "   if 'c' is a dot operator then 'ciwfoo' should store ['iw', 'foo'] and then
 "   'c.' should be equivalent to 'ciw'.
-" TODO: ; and , should store the last count and use that for repeat unless a new
-"   count is provided.
 " TODO: enable chained operand support (refactor s:inputs, operand expr reduction)
 " TODO: operator pending mode for dot/pair repeat
 " TODO: pair repeat with different modes?
@@ -117,9 +112,8 @@ function _op_#op#ComputeMapCallback() abort range
 
     if _op_#stack#Depth() == 1
         if s:ModifiersNeeded(l:handle)
-            let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:handle['mods'], l:handle['opts'], l:handle['init']['op'])
-
             call _op_#utils#RestoreState(l:handle['state'])
+            let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:handle['mods'], l:handle['opts'], l:handle['init']['op'])
             call s:Log('EXIT', s:PModes(0), 'FEED_tx!=' .. l:expr_with_modifiers .. s:ambiguous_map_chars)
             if l:handle['opts']['silent']
                 silent call feedkeys(l:expr_with_modifiers .. s:ambiguous_map_chars, 'x!')
@@ -373,17 +367,19 @@ function s:ParentCallUpdate(handle) abort
 endfunction
 
 function s:GetCharFromUser(handle) abort
+    let l:mode = s:HModeToMapMode(s:hijack['hmode'])
+    let l:match_ids = []
     " extra typeahead may be available if user typed fast
-    call _op_#utils#RestoreState(a:handle['state'])
-    if s:hijack['hmode'] =~# '\v^(i|i-l)$'
-        let l:char = s:GetCharFromUser_i(a:handle)
-    elseif s:hijack['hmode'] =~# '\v^(no[vV]?|consumed|[nv]-l)(-l)?$'
-        let l:char = s:GetCharFromUser_no(a:handle)
-    elseif s:hijack['hmode'] =~# '\v^(c|c-l)$'
-        let l:char = s:GetCharFromUser_c(a:handle)
-    else
-        call _op_#op#Throw('cyclops.vim: unsupported hijack mode ' .. string(s:hijack['hmode']))
+    if !getchar(1)
+        call _op_#utils#RestoreState(a:handle['state'])
+        let l:match_ids = s:SetInteractiveElements(a:handle, l:mode)
     endif
+
+    try
+        let l:char = s:GetCharStr(l:mode)
+    finally
+        call s:ClearHighlights(l:match_ids)
+    endtry
 
     if empty(l:char)
         call _op_#op#Throw('cyclops.vim: empty char received from user')
@@ -393,33 +389,28 @@ function s:GetCharFromUser(handle) abort
     return l:char
 endfunction
 
-function s:GetCharFromUser_i(handle) abort
-    let l:match_ids = []
-    try
-        " update buffer if waiting for user input
-        if !getchar(1)
-            call _op_#utils#RestoreState(a:handle['state'])
-            call s:Log('GetCharFromUser_i', s:PModes(0), 'FEED_tx=' .. a:handle['expr']['reduced'] .. s:input_stream)
-            silent call feedkeys(a:handle['expr']['reduced'] .. s:input_stream, 'x')
-            let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
-            call add(l:match_ids, matchadd(l:cursor_hl, '\%' .. line('.') .. 'l\%' .. (col('.')+1) .. 'c'))
-            redraw
-        endif
-        let l:char = s:GetCharStr('i')
-    finally
-        call s:ClearHighlights(l:match_ids)
-    endtry
-
-    return l:char
+function s:HModeToMapMode(hmode) abort
+    if a:hmode =~# '\v^(i|i-l)$'
+        return 'i'
+    elseif a:hmode =~# '\v^(no[vV]?|consumed|[nv]-l)(-l)?$'
+        return 'o'
+    elseif a:hmode =~# '\v^(c|c-l)$'
+        return 'c'
+    else
+        call _op_#op#Throw('cyclops.vim: unsupported hijack mode ' .. string(a:hmode))
+    endif
 endfunction
 
-function s:GetCharFromUser_no(handle) abort
+function s:SetInteractiveElements(handle, mode) abort
     let l:match_ids = []
-
-    if !getchar(1)
+    if a:mode ==# 'i'
+        call _op_#utils#RestoreState(a:handle['state'])
+        call s:Log('GetCharFromUser_i', s:PModes(0), 'FEED_tx=' .. a:handle['expr']['reduced'] .. s:input_stream)
+        silent call feedkeys(a:handle['expr']['reduced'] .. s:input_stream, 'x')
+        let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
+        call add(l:match_ids, matchadd(l:cursor_hl, '\%' .. line('.') .. 'l\%' .. (col('.')+1) .. 'c'))
+    elseif a:mode ==# 'o'
         unsilent echo 'Operator Input:' .. s:input_stream
-
-        " set highlights
         let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
         if a:handle['init']['mode'] =~# '\v^[vV]$'
             if a:handle['init']['mode'] =~# '\v^[vV]$'
@@ -430,43 +421,29 @@ function s:GetCharFromUser_no(handle) abort
             endif
         endif
         call add(l:match_ids, matchadd(l:cursor_hl, '\%' .. line('.') .. 'l\%' .. col('.') .. 'c'))
-        redraw
-    endif
-
-    try
-        let l:char = s:GetCharStr('o')
-    finally
-        call s:ClearHighlights(l:match_ids)
-    endtry
-
-    return l:char
-endfunction
-
-function s:GetCharFromUser_c(handle) abort
-    let l:match_ids = []
-
-    if !getchar(1)
+    elseif a:mode ==# 'c'
         unsilent echo s:hijack['cmd_type'] .. s:hijack['cmd']
-
-        " set highlights
         let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
-
         let l:input = (s:hijack['cmd_type'] == s:input_stream[0])? s:input_stream[1:] : s:input_stream
         if s:hijack['cmd_type'] =~# '\v[/?]' && &incsearch
             nohlsearch
             call add(l:match_ids, matchadd(l:cursor_hl, '\%' .. line('.') .. 'l\%' .. col('.') .. 'c'))
             silent! call add(l:match_ids, matchadd('IncSearch', l:input))
         endif
-        redraw
+    else
+        throw 'cyclops.vim: unsupported interactive mode ' .. string(a:mode))
     endif
 
-    try
-        let l:char = s:GetCharStr('c')
-    finally
-        call s:ClearHighlights(l:match_ids)
-    endtry
+    redraw
+    return l:match_ids
+endfunction
 
-    return l:char
+function s:ClearHighlights(match_ids) abort
+    for l:id in a:match_ids
+        if l:id > 0
+            call matchdelete(l:id)
+        endif
+    endfor
 endfunction
 
 function s:GetCharStr(mode) abort
@@ -485,14 +462,6 @@ function s:GetCharStr(mode) abort
     endif
 
     return l:char
-endfunction
-
-function s:ClearHighlights(match_ids) abort
-    for l:id in a:match_ids
-        if l:id > 0
-            call matchdelete(l:id)
-        endif
-    endfor
 endfunction
 
 function s:GetCharFromTypeahead(handle) abort
