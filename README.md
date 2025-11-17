@@ -61,6 +61,9 @@ limitations:
 
 ## Limitations
 
+Performance is not optimal, there is a short, but perceptible, delay when
+executing operators with input. This will be improved in future releases.
+
 `iminsert` is enabled while processing mappings, this may have unintended side
 effects if language mappings (`:lmap`) are used. A workaround could be
 implemented.
