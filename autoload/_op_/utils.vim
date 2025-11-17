@@ -21,6 +21,7 @@ function _op_#utils#GetState() abort
 endfunction
 
 function _op_#utils#RestoreState(state) abort
+    call s:Log('RestoreState', '', _op_#stack#Top()['expr']['orig'])
     call win_gotoid(a:state['winid'])
 
     let l:cur_bufnr = bufnr()

@@ -31,6 +31,11 @@ let s:hijack_esc = repeat("\<esc>", 3)
 " this pattern matches also n-l-l and v-l-l, but these modes are not possible and this pattern is simpler
 let s:operator_hmode_pattern = '\v^(no[vV]?|consumed|i|c|[nv]-l)(-l)?$'
 
+
+" Problem: feedkeys('dfa×') ends in (lang) operator pending mode
+" Workaround: break out of hijack loop early if detected
+let s:fFtT_op_pending_pattern = '\v^(no[vV]?-l)$'
+
 let s:hijack = {'hmode': '', 'cmd': '', 'cmd_type': ''}
 let s:input_stream = ''
 let s:ambiguous_map_chars = ''
@@ -93,6 +98,7 @@ endfunction
 
 function _op_#op#ComputeMapCallback() abort range
     let l:handle = _op_#stack#Top()
+    let l:handle['state'] = _op_#utils#GetState()
     call s:Log('ComputeMapCallback', s:PModes(2), 'expr=' .. l:handle['expr']['orig'] .. ' typeahead=' .. s:TypeaheadLog())
 
     if _op_#stack#Depth() == 1
@@ -100,6 +106,7 @@ function _op_#op#ComputeMapCallback() abort range
             call s:ComputeMapOnStack(l:handle)
         catch /op#abort/
             echohl ErrorMsg | echomsg _op_#stack#GetException() | echohl None
+            call _op_#utils#RestoreState(l:handle['state'])
             return
         endtry
     else
@@ -109,12 +116,16 @@ function _op_#op#ComputeMapCallback() abort range
     call s:StoreHandle(l:handle)
 
     if _op_#stack#Depth() == 1
-        let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:handle['mods'], l:handle['opts'], l:handle['init']['op'])
-        call s:Log('EXIT', s:PModes(0), 'FEED_tx!=' .. l:expr_with_modifiers .. s:ambiguous_map_chars)
-        if l:handle['opts']['silent']
-            silent call feedkeys(l:expr_with_modifiers .. s:ambiguous_map_chars, 'x!')
-        else
-            call feedkeys(l:expr_with_modifiers .. s:ambiguous_map_chars, 'x!')
+        if s:ModifiersNeeded(l:handle)
+            let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:handle['mods'], l:handle['opts'], l:handle['init']['op'])
+
+            call _op_#utils#RestoreState(l:handle['state'])
+            call s:Log('EXIT', s:PModes(0), 'FEED_tx!=' .. l:expr_with_modifiers .. s:ambiguous_map_chars)
+            if l:handle['opts']['silent']
+                silent call feedkeys(l:expr_with_modifiers .. s:ambiguous_map_chars, 'x!')
+            else
+                call feedkeys(l:expr_with_modifiers .. s:ambiguous_map_chars, 'x!')
+            endif
         endif
         call _op_#stack#Pop(0, 'StackInit')
     endif
@@ -130,8 +141,11 @@ function s:ComputeMapOnStack(handle) abort
             call s:Log('ComputeMapOnStack', '', 'ambiguous map chars=' .. s:ambiguous_map_chars)
         endif
 
-        " recursion typically happens at this ProbeExpr call, but can also
-        " happen in HijackInput if a registered omap is triggered
+        " Nested op#map calls results in recursion and is managed by a stack.
+        " Recursion typically happens at this ProbeExpr call, but can also
+        " happen in HijackInput if a registered omap is triggered. When
+        " recursion happens, callee's update the caller's reduced expr, removing
+        " the recursion in subsequent calls.
 
         call s:ProbeExpr(a:handle['init']['op'] .. a:handle['expr']['orig'], 'expr_orig')
         let l:input = s:HijackInput(a:handle)
@@ -141,12 +155,14 @@ function s:ComputeMapOnStack(handle) abort
         call s:ParentCallInit(a:handle)
         call inputsave()
 
+        call _op_#utils#RestoreState(a:handle['state'])
         call s:ProbeExpr(a:handle['init']['op'] .. a:handle['expr']['orig'], 'expr_orig')
         let l:input = s:HijackInput(a:handle)
         call s:CheckForProbeErrors()
         let a:handle['expr']['reduced'] ..= l:input
         call s:ParentCallUpdate(a:handle)
 
+        call _op_#utils#RestoreState(a:handle['state'])
         call s:Log('ComputeMapOnStack', 'EXIT', 'FEED_tx!=' .. a:handle['init']['op'] .. a:handle['expr']['reduced'])
         silent call feedkeys(a:handle['init']['op'] .. a:handle['expr']['reduced'], 'x!')
         call inputrestore()
@@ -177,6 +193,7 @@ function s:HijackInput(handle) abort
         let l:ambig_char = strcharpart(s:ambiguous_map_chars, 0, 1)
         let s:ambiguous_map_chars = strcharpart(s:ambiguous_map_chars, 1)
         let s:input_stream ..= l:ambig_char
+        call _op_#utils#RestoreState(a:handle['state'])
         call s:ProbeExpr(l:op .. l:expr .. s:input_stream, 'ambig chars')
     endwhile
 
@@ -184,16 +201,12 @@ function s:HijackInput(handle) abort
         if a:handle['expr']['input_source'] ==# 'user'
             while s:hijack['hmode'] =~# s:operator_hmode_pattern
                 let l:char = s:GetCharFromUser(a:handle)
-                call s:Log('', 'GOT CHAR=' .. l:char)
                 let s:input_stream = s:ProcessStream(s:input_stream, l:char)
-                call s:Log('', 'input_stream=' .. s:input_stream)
-                if s:hijack['hmode'] =~# '\v^no[vV]?-l$'
+                if s:hijack['hmode'] =~# s:fFtT_op_pending_pattern
                     call s:Log('HijackInput no-l break', '', "feedkeys('dfa×') workaround")
-                    " Problem: feedkeys('dfa×') ends in (lang) operator pending mode
-                    " Workaround: break out of loop early if detected
-                    " let s:hijack['hmode'] = 'n'
                     break
                 endif
+                call _op_#utils#RestoreState(a:handle['state'])
                 call s:ProbeExpr(l:op .. l:expr .. s:input_stream, 'hijack')
             endwhile
             unsilent echo
@@ -201,6 +214,7 @@ function s:HijackInput(handle) abort
         else
             while s:hijack['hmode'] =~# s:operator_hmode_pattern
                 let s:input_stream ..= s:GetCharFromTypeahead(a:handle)
+                call _op_#utils#RestoreState(a:handle['state'])
                 call s:ProbeExpr(l:op .. l:expr .. s:input_stream, 'typeahead')
             endwhile
         endif
@@ -246,8 +260,6 @@ function s:ProbeExpr(expr, type) abort
     let l:msg = 'FEED_tx!=' .. a:expr .. '<PROBE>' .. ' typeahead=' .. s:TypeaheadLog()
     let l:stack_id = _op_#stack#Push(a:type, l:msg)
 
-    let l:state = _op_#utils#GetState()
-
     " HijackProbMap may be consumed instead of expanded, set default case
     let s:hijack = { 'hmode': 'consumed', 'cmd': '', 'cmd_type': '' }
 
@@ -280,7 +292,6 @@ function s:ProbeExpr(expr, type) abort
         let &iminsert = l:iminsert
         let [ &ttimeout, &ttimeoutlen ] = [ l:ttimeout, l:ttimeoutlen ]
         let [ &timeout, &timeoutlen ] = [ l:timeout, l:timeoutlen ]
-        call _op_#utils#RestoreState(l:state)
     endtry
     call _op_#stack#Pop(l:stack_id, 'typeahead=' .. s:ReadTypeaheadTruncated())
 endfunction
@@ -363,6 +374,7 @@ endfunction
 
 function s:GetCharFromUser(handle) abort
     " extra typeahead may be available if user typed fast
+    call _op_#utils#RestoreState(a:handle['state'])
     if s:hijack['hmode'] =~# '\v^(i|i-l)$'
         let l:char = s:GetCharFromUser_i(a:handle)
     elseif s:hijack['hmode'] =~# '\v^(no[vV]?|consumed|[nv]-l)(-l)?$'
@@ -383,10 +395,10 @@ endfunction
 
 function s:GetCharFromUser_i(handle) abort
     let l:match_ids = []
-    let l:state = _op_#utils#GetState()
     try
         " update buffer if waiting for user input
         if !getchar(1)
+            call _op_#utils#RestoreState(a:handle['state'])
             call s:Log('GetCharFromUser_i', s:PModes(0), 'FEED_tx=' .. a:handle['expr']['reduced'] .. s:input_stream)
             silent call feedkeys(a:handle['expr']['reduced'] .. s:input_stream, 'x')
             let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
@@ -396,7 +408,6 @@ function s:GetCharFromUser_i(handle) abort
         let l:char = s:GetCharStr('i')
     finally
         call s:ClearHighlights(l:match_ids)
-        call _op_#utils#RestoreState(l:state)
     endtry
 
     return l:char
@@ -584,6 +595,21 @@ function s:StoreHandle(handle) abort
 
     let l:name = a:handle['init']['handle_type']
     let s:handles[l:name] = l:handle_to_store
+endfunction
+
+function s:ModifiersNeeded(handle) abort
+    if s:hijack['hmode']  !=# 'n'
+        return v:true
+    endif
+    if a:handle['opts']['accepts_count'] && a:handle['mods']['count1'] != 1
+        return v:true
+    endif
+    execute "normal! \<esc>"
+    if v:register !=# a:handle['mods']['register']
+        return v:true
+    endif
+    call s:Log('ModifiersNeeded FALSE', 'EXIT', 'no modifiers needed')
+    return v:false
 endfunction
 
 function _op_#op#ExprWithModifiers(expr, mods, opts, ...) abort
