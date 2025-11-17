@@ -105,7 +105,7 @@ function s:FormatValue(key, value) abort
     let l:value = deepcopy(a:value)
     if type(a:value) == v:t_string
         let l:value = s:ToPrintable(a:value)
-    elseif type(a:value) == v:t_list && !empty(a:value) && type(a:value[0]) == v:t_string
+    elseif type(a:value) == v:t_list
         call map(l:value, 's:ToPrintable(v:val)')
     endif
 
@@ -116,6 +116,9 @@ function s:FormatValue(key, value) abort
 endfunction
 
 function s:ToPrintable(value) abort
+    if type(a:value) != v:t_string
+        return a:value
+    endif
     let l:ctrl_names = [
                 \ '<nul>', '<c-a>', '<c-b>', '<c-c>', '<c-d>', '<c-e>', '<c-f>', '<c-g>',
                 \ '<bs>' , '<tab>', '<nl>' , '<c-k>', '<c-l>', '<cr>' , '<c-n>', '<c-o>',
