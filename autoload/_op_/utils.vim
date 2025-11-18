@@ -61,6 +61,16 @@ function _op_#utils#RestoreVisualState(v_state) abort
     endif
 endfunction
 
+function _op_#utils#DefaultRegister() abort
+    if stridx(&clipboard, 'unnamedplus') != -1
+        return '+'
+    elseif stridx(&clipboard, 'unnamed') != -1
+        return '*'
+    else
+        return '"'
+    endif
+endfunction
+
 function _op_#utils#GetType(val) abort
     let l:type = type(a:val)
     if     l:type == v:t_number
