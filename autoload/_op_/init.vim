@@ -19,6 +19,15 @@ function _op_#init#AssertExprMap() abort
     endif
 endfunction
 
+function _op_#init#AssertRemap(map, mapping_type) abort
+    if !g:cyclops_asserts_enabled
+        return
+    endif
+    if a:mapping_type =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)'
+        throw 'op#MAP_noremap'
+    endif
+endfunction
+
 function _op_#init#AssertSameRHS(map, mapping_type) abort
     if !g:cyclops_asserts_enabled
         return
@@ -76,6 +85,7 @@ function _op_#init#RegisterNoremap(map) abort
 endfunction
 
 function _op_#init#RegisterMap(mapping_type, map) abort
+    call _op_#init#AssertRemap(a:map, a:mapping_type)
     call _op_#init#AssertSameRHS(a:map, a:mapping_type)
 
     let l:plugmap = '<plug>(op#_' .. a:mapping_type .. '_' .. a:map .. ')'

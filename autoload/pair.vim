@@ -14,7 +14,7 @@ let s:AssertPair        = function('_op_#init#AssertPair')
 let s:ExtendDefaultOpts = function('_op_#init#ExtendDefaultOpts')
 let s:StackInit         = function('_op_#op#StackInit')
 
-function pair#MapNext(pair, ...) abort range
+function pair#MapNext(pair, ...) abort
     call s:AssertExprMap()
     call s:AssertPair(a:pair)
     if !empty(reg_recording()) || !empty(reg_executing())
@@ -27,7 +27,7 @@ function pair#MapNext(pair, ...) abort range
     return l:omap_esc .. "\<cmd>call _op_#pair#ComputeMapCallback()\<cr>"
 endfunction
 
-function pair#MapPrev(pair, ...) abort range
+function pair#MapPrev(pair, ...) abort
     call s:AssertExprMap()
     call s:AssertPair(a:pair)
     if !empty(reg_recording()) || !empty(reg_executing())
@@ -40,7 +40,7 @@ function pair#MapPrev(pair, ...) abort range
     return l:omap_esc .. "\<cmd>call _op_#pair#ComputeMapCallback()\<cr>"
 endfunction
 
-function pair#NoremapNext(pair, ...) abort range
+function pair#NoremapNext(pair, ...) abort
     call s:AssertExprMap()
     call s:AssertPair(a:pair)
     if !empty(reg_recording()) || !empty(reg_executing())
@@ -54,7 +54,7 @@ function pair#NoremapNext(pair, ...) abort range
     return l:omap_esc .. "\<cmd>call _op_#pair#ComputeMapCallback()\<cr>"
 endfunction
 
-function pair#NoremapPrev(pair, ...) abort range
+function pair#NoremapPrev(pair, ...) abort
     call s:AssertExprMap()
     call s:AssertPair(a:pair)
     if !empty(reg_recording()) || !empty(reg_executing())
@@ -68,7 +68,12 @@ function pair#NoremapPrev(pair, ...) abort range
     return l:omap_esc .. "\<cmd>call _op_#pair#ComputeMapCallback()\<cr>"
 endfunction
 
-function pair#SetMaps(mapping_type, pairs, ...) abort range
+function pair#SetMap(mapping_type, pair, ...) abort
+    let l:opts_dict = a:0 ? a:1 : {}
+    call s:SetMap(a:mapping_type, a:pair, l:opts_dict)
+endfunction
+
+function pair#SetMaps(mapping_type, pairs, ...) abort
     let l:opts_dict = a:0 ? a:1 : {}
     if type(a:pairs[0]) == v:t_list
         for l:pair in a:pairs
@@ -80,19 +85,17 @@ function pair#SetMaps(mapping_type, pairs, ...) abort range
 endfunction
 
 function s:SetMap(mapping_type, pair, opts_dict) abort
-    if a:mapping_type =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)'
-        execute a:mapping_type .. ' <expr> ' .. a:pair[0] .. ' pair#NoremapNext(' .. string(a:pair) .. ', ' .. string(a:opts_dict) .. ')'
-        execute a:mapping_type .. ' <expr> ' .. a:pair[1] .. ' pair#NoremapPrev(' .. string(a:pair) .. ', ' .. string(a:opts_dict) .. ')'
-    else
-        try
-            let l:plugpair = s:RegisterMapPair(a:mapping_type, a:pair)
-        catch /op#MAP_DNE/
-            echohl WarningMsg | echomsg 'cyclops.vim: Warning: Could not set mapping for pair: ' .. string(a:pair) .. ' -- one or both mappings do not exist.' | echohl None
-            return
-        endtry
-        execute a:mapping_type .. ' <expr> ' .. a:pair[0] .. ' pair#MapNext(' .. string(l:plugpair) .. ', ' .. string(a:opts_dict) .. ')'
-        execute a:mapping_type .. ' <expr> ' .. a:pair[1] .. ' pair#MapPrev(' .. string(l:plugpair) .. ', ' .. string(a:opts_dict) .. ')'
-    endif
+    try
+        let l:plugpair = s:RegisterMapPair(a:mapping_type, a:pair)
+    catch /op#MAP_noremap/
+        echohl ErrorMsg | echomsg 'cyclops.vim: Error: SetMap cannot be used with noremap mappings: ' .. string(a:pair) | echohl None
+        return
+    catch /op#MAP_DNE/
+        echohl WarningMsg | echomsg 'cyclops.vim: Warning: Could not set mapping for pair: ' .. string(a:pair) .. ' -- one or both mappings do not exist.' | echohl None
+        return
+    endtry
+    execute a:mapping_type .. ' <expr> ' .. a:pair[0] .. ' pair#MapNext(' .. string(l:plugpair) .. ', ' .. string(a:opts_dict) .. ')'
+    execute a:mapping_type .. ' <expr> ' .. a:pair[1] .. ' pair#MapPrev(' .. string(l:plugpair) .. ', ' .. string(a:opts_dict) .. ')'
 endfunction
 
 function s:RegisterNoremapPair(pair) abort

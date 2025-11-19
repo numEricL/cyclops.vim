@@ -87,7 +87,11 @@ xmap <expr> gs  dot#Map('<Plug>VgSurround')
 
 Add pair repeat functionality with `;` `,` to window resizing:
 ``` vim
-call pair#SetMaps('noremap', [['<c-w>>', '<c-w><'], ['<c-w>+', '<c-w>-']], {'accepts_register': 0})
+nmap <expr> <c-w>> pair#NoremapNext(['<c-w>>', '<c-w><'], {'accepts_register': 0})
+nmap <expr> <c-w>< pair#NoremapPrev(['<c-w>>', '<c-w><'], {'accepts_register': 0})
+
+nmap <expr> <c-w>+ pair#NoremapNext(['<c-w>+', '<c-w>-'], {'accepts_register': 0})
+nmap <expr> <c-w>- pair#NoremapPrev(['<c-w>+', '<c-w>-'], {'accepts_register': 0})
 ```
 
 Extend dot `d`
