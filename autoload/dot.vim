@@ -66,13 +66,13 @@ function dot#SetMaps(mapping_type, maps, ...) abort
     else
         call s:SetMapDeprecated(a:mapping_type, a:maps, l:opts_dict)
     endif
-    echohl WarningMsg | echomsg 'cyclops.vim: Deprecation Notice: dot#SetMaps is deprecated. Please use dot#SetMap for individual mappings.' | echohl None
+    call _op_#init#DeprecationNotice('dot#SetMaps is deprecated. Please use dot#SetMap for individual mappings. Supress this message with g:cyclops_suppress_deprecation_warnings')
 endfunction
 
 function s:SetMapDeprecated(mapping_type, map, opts_dict) abort
     if a:mapping_type =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)'
         execute a:mapping_type .. ' <expr> ' .. a:map .. ' dot#Noremap(' .. string(a:map) .. ', ' .. string(a:opts_dict) .. ')'
-        echohl WarningMsg | echomsg 'cyclops.vim: Deprecation Notice: dot#SetMap(s) will no longer support noremap mappings in future versions. Use dot#Noremap instead.' | echohl None
+        call _op_#init#DeprecationNotice('dot#SetMap(s) will no longer support noremap mappings in future releases. Use dot#Noremap instead.')
     else
         try
             let l:plugmap = _op_#init#RegisterMap(a:mapping_type, a:map)

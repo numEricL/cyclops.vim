@@ -108,14 +108,14 @@ function pair#SetMaps(mapping_type, pairs, ...) abort
     else
         call s:SetMapDeprecated(a:mapping_type, a:pairs, l:opts_dict)
     endif
-    echohl WarningMsg | echomsg 'cyclops.vim: Deprecation Notice: pair#SetMaps is deprecated. Please use dot#SetMap for individual mappings.' | echohl None
+    call _op_#init#DeprecationNotice('pair#SetMaps is deprecated. Please use pair#SetMap for individual mappings. Supress this message with g:cyclops_suppress_deprecation_warnings')
 endfunction
 
 function s:SetMapDeprecated(mapping_type, pair, opts_dict) abort
     if a:mapping_type =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)'
         execute a:mapping_type .. ' <expr> ' .. a:pair[0] .. ' pair#NoremapNext(' .. string(a:pair) .. ', ' .. string(a:opts_dict) .. ')'
         execute a:mapping_type .. ' <expr> ' .. a:pair[1] .. ' pair#NoremapPrev(' .. string(a:pair) .. ', ' .. string(a:opts_dict) .. ')'
-        echohl WarningMsg | echomsg 'cyclops.vim: Deprecation Notice: pair#SetMap(s) will no longer support noremap mappings in future versions. Use pair#NoremapNext/Prev instead.' | echohl None
+        call _op_#init#DeprecationNotice('pair#SetMap(s) will no longer support noremap mappings in future releases. Use pair#NoremapNext/Prev instead.')
     else
         try
             let l:plugpair = s:RegisterMapPair(a:mapping_type, a:pair)

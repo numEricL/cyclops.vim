@@ -108,5 +108,11 @@ function _op_#init#RegisterMap(mapping_type, map) abort
     return l:plugmap
 endfunction
 
+function _op_#init#DeprecationNotice(msg) abort
+    if !g:cyclops_suppress_deprecation_warnings
+        echohl WarningMsg | echomsg 'cyclops.vim: Deprecation Notice: ' .. a:msg | echohl None
+    endif
+endfunction
+
 let &cpo = s:cpo
 unlet s:cpo
