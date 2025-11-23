@@ -8,12 +8,12 @@ set cpo&vim
 
 silent! call _op_#init#settings#Load()
 
-noremap <expr> <plug>(dot#dot) _op_#dot#RepeatMap()
+vnoremap <expr> <plug>(dot#vdot) _op_#dot#VisRepeatMap()
 noremap <expr> <plug>(pair#next) _op_#pair#PairRepeatMap('next')
 noremap <expr> <plug>(pair#prev) _op_#pair#PairRepeatMap('prev')
 
 if !g:cyclops_no_mappings
-    noremap . <plug>(dot#dot)
+    vnoremap . <plug>(dot#vdot)
     noremap ; <plug>(pair#next)
     noremap , <plug>(pair#prev)
     noremap <expr> f pair#NoremapNext(['f', 'F'])

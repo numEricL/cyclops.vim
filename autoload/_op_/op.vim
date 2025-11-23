@@ -77,7 +77,7 @@ function _op_#op#InitCallback(handle, handle_type, expr, opts) abort
                 \ 'op'          : mode(1)[:1] ==# 'no'? _op_#init#RegisterNoremap(v:operator .. mode(1)[2]) : '',
                 \ } } )
     call extend(a:handle, { 'mods' : {
-                \ 'count1'   : v:count1,
+                \ 'count'    : v:count,
                 \ 'register' : v:register,
                 \ } } )
     call extend(a:handle, { 'opts' : a:opts } )
@@ -170,16 +170,18 @@ function s:HijackInput(handle) abort
         return ''
     endif
 
-    if a:handle['expr']['input_source'] ==# 'cache'
-        let s:input_stream = remove(a:handle['expr']['inputs'], 0)
-        call s:Log('HijackInput', '', 'cached input=' .. s:input_stream)
-        return s:input_stream
-    endif
-
     " Get input from ambig maps, user, or typeahead
     let s:input_stream = ''
     let l:op = a:handle['init']['op']
     let l:expr = a:handle['expr']['reduced']
+
+    if a:handle['expr']['input_source'] ==# 'cache'
+        let s:input_stream = remove(a:handle['expr']['inputs'], 0)
+        call s:Log('HijackInput', '', 'cached input=' .. s:input_stream)
+        call _op_#utils#RestoreState(a:handle['state'])
+        call s:ProbeExpr(l:op .. l:expr .. s:input_stream, 'cache')
+        return s:input_stream
+    endif
 
     " call s:Log(s:Pad('HijackInput GET INPUT: ', 30) .. 'expr=' .. l:op .. l:expr .. ' typeahead=' .. s:TypeaheadLog())
 
@@ -567,14 +569,17 @@ function s:StoreHandle(handle) abort
 endfunction
 
 function s:ModifiersNeeded(handle) abort
+    " HijackInput always ends with the probe that returns to normal mode, so we
+    " must correct it here.
+    " This is not necessary if know the probe will not be consumed, so further
+    " optimization is possible.
     if s:hijack['hmode']  !=# 'n'
         return v:true
     endif
-    if a:handle['opts']['accepts_count'] && a:handle['mods']['count1'] != 1
+    if a:handle['opts']['accepts_count'] && a:handle['mods']['count'] != 0
         return v:true
     endif
-    execute "normal! \<esc>"
-    if v:register !=# a:handle['mods']['register']
+    if a:handle['opts']['accepts_register'] && a:handle['mods']['register'] !=# _op_#utils#DefaultRegister()
         return v:true
     endif
     call s:Log('ModifiersNeeded FALSE', 'EXIT', 'no modifiers needed')
@@ -587,10 +592,13 @@ function _op_#op#ExprWithModifiers(expr, mods, opts, ...) abort
     let l:register = (a:opts['accepts_register'])? '"' .. a:mods['register'] : ''
     let l:expr_with_modifiers = l:register .. l:op .. a:expr
 
-    if a:opts['accepts_count'] && a:mods['count1'] != 1
-        let l:expr_with_modifiers = a:mods['count1'] .. l:expr_with_modifiers
-    elseif !a:opts['accepts_count']
-        let l:expr_with_modifiers = repeat(l:expr_with_modifiers, a:mods['count1'])
+    if a:mods['count'] != 0
+        if a:opts['accepts_count']
+            let l:expr_with_modifiers = a:mods['count'] .. l:expr_with_modifiers
+        elseif !a:opts['accepts_count']
+            let l:count1 = max([1, a:mods['count']])
+            let l:expr_with_modifiers = repeat(l:expr_with_modifiers, l:count1)
+        endif
     endif
     call s:Log('ExprWithModifiers', '', 'expr_with_modifiers=' .. l:expr_with_modifiers)
 
