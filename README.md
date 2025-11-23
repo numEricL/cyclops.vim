@@ -119,3 +119,9 @@ nmap <expr> <plug>(search) op#Noremap('/')
 nmap <expr> <plug>(change) op#Noremap('ciw')
 nmap <expr> R dot#Map('<plug>(search)<plug>(change)')
 ```
+
+## Deprecation Notice
+
+dot#SetMaps and pair#SetMaps are deprecated. Use dot#SetMap and pair#SetMap for
+each individual mapping instead. For noremap mappings, use dot#Noremap and
+pair#NoremapNext/Prev.
