@@ -22,7 +22,7 @@ function dot#Map(map, ...) abort
     call _op_#dot#InitCallback(l:handle)
     let &operatorfunc = '_op_#dot#ComputeMapCallback'
     let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
-    return l:omap_esc .. 'g@' .. (mode(0) ==# 'n'? '_' : '')
+    return l:omap_esc .. 'g@' .. (mode(0) ==# 'n'? 'l' : '')
 endfunction
 
 function dot#Noremap(map, ...) abort
@@ -36,7 +36,7 @@ function dot#Noremap(map, ...) abort
     call _op_#dot#InitCallback(l:handle)
     let &operatorfunc = '_op_#dot#ComputeMapCallback'
     let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
-    return l:omap_esc .. 'g@' .. (mode(0) ==# 'n'? '_' : '')
+    return l:omap_esc .. 'g@' .. (mode(0) ==# 'n'? 'l' : '')
 endfunction
 
 function dot#SetMap(mapping_type, map, ...) abort

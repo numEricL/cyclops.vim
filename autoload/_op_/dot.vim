@@ -46,22 +46,15 @@ function _op_#dot#ExceptionCallback(dummy) abort
     echohl ErrorMsg | echomsg 'last dot operation failed' | echohl None
 endfunction
 
-function _op_#dot#RepeatMap() abort
+function _op_#dot#VisRepeatMap() abort
     call _op_#init#AssertExprMap()
     let l:handle = _op_#op#GetStoredHandle('dot')
-    call _op_#dot#InitRepeatCallback(l:handle)
-
-    if !has_key(l:handle, 'init') || (mode(0) =~# '\v^[vV]$' && l:handle['init']['mode'] ==# 'n')
+    if !has_key(l:handle, 'init') || l:handle['init']['mode'] ==# 'n'
         return '.'
     endif
-
-    if mode(1) ==# 'n'
-        return '.'
-    elseif mode(0) =~# '\v^[vV]$'
-        return "\<esc>."
-    else
-        throw 'cyclops.vim: unimplemented mode: ' .. mode(1)
-    endif
+    call s:InitRepeatCallback(l:handle)
+    let l:handle['repeat']['vdot'] = v:true
+    return "\<esc>."
 endfunction
 
 " function _op_#dot#RepeatOpPending() abort
@@ -73,7 +66,7 @@ endfunction
 "     endif
 " endfunction
 
-function _op_#dot#InitRepeatCallback(handle) abort
+function s:InitRepeatCallback(handle) abort
     if (g:cyclops_persistent_count && v:count == 0)
         let l:init_count = has_key(a:handle, 'mods')? a:handle['mods']['count'] : 0
         let l:count = has_key(a:handle, 'repeat_mods')? a:handle['repeat_mods']['count'] : l:init_count
@@ -83,6 +76,7 @@ function _op_#dot#InitRepeatCallback(handle) abort
     call extend(a:handle, { 'repeat' : {
                 \ 'mode'     : mode(1),
                 \ 'curpos'   : getcurpos(),
+                \ 'vdot'     : mode(0) =~# '\v^[vV]$'
                 \ } } )
     call extend(a:handle, { 'repeat_mods': {
                 \ 'count'    : l:count,
@@ -92,12 +86,20 @@ endfunction
 
 function _op_#dot#RepeatCallback(dummy) abort
     let l:handle = _op_#op#GetStoredHandle('dot')
-    call s:RestoreRepeatEntry(l:handle)
-    let l:expr = l:handle['expr']['reduced']
-    if l:handle['opts']['silent']
-        silent call feedkeys(_op_#op#ExprWithModifiers(l:expr, l:handle['repeat_mods'], l:handle['opts']), 'x!')
+    " normal mode dot initializes here, visdot initializes in <expr> map
+    if has_key(l:handle, 'repeat') && l:handle['repeat']['vdot'] == v:true
+        " reset for next dot call
+        let l:handle['repeat']['vdot'] = v:false
     else
-        call feedkeys(_op_#op#ExprWithModifiers(l:expr, l:handle['repeat_mods'], l:handle['opts']), 'x!')
+        call s:InitRepeatCallback(l:handle)
+    endif
+    call s:RestoreRepeatEntry(l:handle)
+    let l:opts = extend({'accepts_count': v:false}, l:handle['opts'], 'keep')
+    let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:handle['repeat_mods'], l:opts)
+    if l:opts['silent']
+        silent call feedkeys(l:expr_with_modifiers, 'x!')
+    else
+        call feedkeys(l:expr_with_modifiers, 'x!')
     endif
     let &operatorfunc = '_op_#dot#RepeatCallback'
 endfunction
@@ -107,10 +109,8 @@ function s:RestoreRepeatEntry(handle) abort
     let l:rmode = a:handle['repeat']['mode']
 
     " if initiated in operator-pending mode then treat like normal mode
-    let l:init_repeat = v:false
     if l:imode[0] ==# 'n' && l:rmode ==# 'n'
-        call setpos('.', a:handle['repeat']['curpos'])
-        let l:init_repeat = v:true
+        " call setpos('.', a:handle['repeat']['curpos'])
     elseif l:imode =~# '\v^[vV]$' && l:rmode ==# 'n'
         " shift visual marks to cursor
         let l:v_beg = s:ShiftPos(a:handle['repeat']['curpos'], a:handle['marks']['v'], a:handle['marks']['.'])
@@ -118,15 +118,11 @@ function s:RestoreRepeatEntry(handle) abort
         call setpos('.', l:v_beg)
         execute "normal! " .. a:handle['dot']['mode']
         call setpos('.', l:v_end)
-        let l:init_repeat = v:true
     elseif l:imode =~# '\v^[vV]$' && l:rmode =~# '\v^[vV]$'
         let l:selectmode = &selectmode | set selectmode=
         normal! gv
         let &selectmode = l:selectmode
-        let l:init_repeat = v:true
-    endif
-
-    if !l:init_repeat
+    else
         throw 'unsupported mode combination: init=' .. l:imode .. ' repeat=' .. l:rmode
     endif
 endfunction

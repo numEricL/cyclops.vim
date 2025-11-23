@@ -596,7 +596,7 @@ function _op_#op#ExprWithModifiers(expr, mods, opts, ...) abort
         if a:opts['accepts_count']
             let l:expr_with_modifiers = a:mods['count'] .. l:expr_with_modifiers
         elseif !a:opts['accepts_count']
-            let l:count1 = max([1, a:mods['count1']])
+            let l:count1 = max([1, a:mods['count']])
             let l:expr_with_modifiers = repeat(l:expr_with_modifiers, l:count1)
         endif
     endif
