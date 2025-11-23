@@ -44,17 +44,6 @@ function dot#SetMap(mapping_type, map, ...) abort
     call s:SetMap(a:mapping_type, a:map, l:opts_dict)
 endfunction
 
-function dot#SetMaps(mapping_type, maps, ...) abort
-    let l:opts_dict = a:0 ? a:1 : {}
-    if type(a:maps) == v:t_list
-        for l:map in a:maps
-            call s:SetMap(a:mapping_type, l:map, l:opts_dict)
-        endfor
-    else
-        call s:SetMap(a:mapping_type, a:maps, l:opts_dict)
-    endif
-endfunction
-
 function s:SetMap(mapping_type, map, opts_dict) abort
     try
         let l:plugmap = _op_#init#RegisterMap(a:mapping_type, a:map)
@@ -66,6 +55,33 @@ function s:SetMap(mapping_type, map, opts_dict) abort
         return
     endtry
     execute a:mapping_type .. ' <expr> ' .. a:map .. ' dot#Map(' .. string(l:plugmap) .. ', ' .. string(a:opts_dict) .. ')'
+endfunction
+
+function dot#SetMaps(mapping_type, maps, ...) abort
+    let l:opts_dict = a:0 ? a:1 : {}
+    if type(a:maps) == v:t_list
+        for l:map in a:maps
+            call s:SetMapDeprecated(a:mapping_type, l:map, l:opts_dict)
+        endfor
+    else
+        call s:SetMapDeprecated(a:mapping_type, a:maps, l:opts_dict)
+    endif
+    echohl WarningMsg | echomsg 'cyclops.vim: Deprecation Notice: dot#SetMaps is deprecated. Please use dot#SetMap for individual mappings.' | echohl None
+endfunction
+
+function s:SetMapDeprecated(mapping_type, map, opts_dict) abort
+    if a:mapping_type =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)'
+        execute a:mapping_type .. ' <expr> ' .. a:map .. ' dot#Noremap(' .. string(a:map) .. ', ' .. string(a:opts_dict) .. ')'
+        echohl WarningMsg | echomsg 'cyclops.vim: Deprecation Notice: dot#SetMap(s) will no longer support noremap mappings in future versions. Use dot#Noremap instead.' | echohl None
+    else
+        try
+            let l:plugmap = _op_#init#RegisterMap(a:mapping_type, a:map)
+        catch /op#MAP_DNE/
+            echohl WarningMsg | echomsg 'cyclops.vim: Warning: Could not set mapping: ' .. string(a:map) .. ' -- mapping does not exist.' | echohl None
+            return
+        endtry
+        execute a:mapping_type .. ' <expr> ' .. a:map .. ' dot#Map(' .. string(l:plugmap) .. ', ' .. string(a:opts_dict) .. ')'
+    endif
 endfunction
 
 let &cpo = s:cpo

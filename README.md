@@ -94,8 +94,21 @@ nmap <expr> <c-w>+ pair#NoremapNext(['<c-w>+', '<c-w>-'], {'accepts_register': 0
 nmap <expr> <c-w>- pair#NoremapPrev(['<c-w>+', '<c-w>-'], {'accepts_register': 0})
 ```
 
+If the mapping you wish to make repeatable already exists, you can use the
+helepr functions xx#SetMap, for example:
+
+``` vim
+"scroll half window with ctrl-hjkl
+noremap <c-l> zL
+noremap <c-h> zH
+noremap <c-j> <c-d>
+noremap <c-k> <c-u>
+call pair#SetMap('map', ['<c-l>', '<c-h>'])
+call pair#SetMap('map', ['<c-j>', '<c-k>'])
+```
+
 Extend dot `d`
-```vim
+``` vim
 nmap <expr> d dot#Noremap('d')
 vmap <expr> d dot#Noremap('d')
 ```

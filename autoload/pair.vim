@@ -73,17 +73,6 @@ function pair#SetMap(mapping_type, pair, ...) abort
     call s:SetMap(a:mapping_type, a:pair, l:opts_dict)
 endfunction
 
-function pair#SetMaps(mapping_type, pairs, ...) abort
-    let l:opts_dict = a:0 ? a:1 : {}
-    if type(a:pairs[0]) == v:t_list
-        for l:pair in a:pairs
-            call s:SetMap(a:mapping_type, l:pair, l:opts_dict)
-        endfor
-    else
-        call s:SetMap(a:mapping_type, a:pairs, l:opts_dict)
-    endif
-endfunction
-
 function s:SetMap(mapping_type, pair, opts_dict) abort
     try
         let l:plugpair = s:RegisterMapPair(a:mapping_type, a:pair)
@@ -108,6 +97,35 @@ function s:RegisterMapPair(mapping_type, pair) abort
     let l:map0 = _op_#init#RegisterMap(a:mapping_type, a:pair[0])
     let l:map1 = _op_#init#RegisterMap(a:mapping_type, a:pair[1])
     return [ l:map0, l:map1 ]
+endfunction
+
+function pair#SetMaps(mapping_type, pairs, ...) abort
+    let l:opts_dict = a:0 ? a:1 : {}
+    if type(a:pairs[0]) == v:t_list
+        for l:pair in a:pairs
+            call s:SetMapDeprecated(a:mapping_type, l:pair, l:opts_dict)
+        endfor
+    else
+        call s:SetMapDeprecated(a:mapping_type, a:pairs, l:opts_dict)
+    endif
+    echohl WarningMsg | echomsg 'cyclops.vim: Deprecation Notice: pair#SetMaps is deprecated. Please use dot#SetMap for individual mappings.' | echohl None
+endfunction
+
+function s:SetMapDeprecated(mapping_type, pair, opts_dict) abort
+    if a:mapping_type =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)'
+        execute a:mapping_type .. ' <expr> ' .. a:pair[0] .. ' pair#NoremapNext(' .. string(a:pair) .. ', ' .. string(a:opts_dict) .. ')'
+        execute a:mapping_type .. ' <expr> ' .. a:pair[1] .. ' pair#NoremapPrev(' .. string(a:pair) .. ', ' .. string(a:opts_dict) .. ')'
+        echohl WarningMsg | echomsg 'cyclops.vim: Deprecation Notice: pair#SetMap(s) will no longer support noremap mappings in future versions. Use pair#NoremapNext/Prev instead.' | echohl None
+    else
+        try
+            let l:plugpair = s:RegisterMapPair(a:mapping_type, a:pair)
+        catch /op#MAP_DNE/
+            echohl WarningMsg | echomsg 'cyclops.vim: Warning: Could not set mapping for pair: ' .. string(a:pair) .. ' -- one or both mappings do not exist.' | echohl None
+            return
+        endtry
+        execute a:mapping_type .. ' <expr> ' .. a:pair[0] .. ' pair#MapNext(' .. string(l:plugpair) .. ', ' .. string(a:opts_dict) .. ')'
+        execute a:mapping_type .. ' <expr> ' .. a:pair[1] .. ' pair#MapPrev(' .. string(l:plugpair) .. ', ' .. string(a:opts_dict) .. ')'
+    endif
 endfunction
 
 let &cpo = s:cpo
