@@ -94,6 +94,7 @@ function _op_#dot#RepeatCallback(dummy) abort
         call s:InitRepeatCallback(l:handle)
     endif
     call s:RestoreRepeatEntry(l:handle)
+    " ensure that 3<dot> is the same as <dot><dot><dot>
     let l:opts = extend({'accepts_count': v:false}, l:handle['opts'], 'keep')
     let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:handle['repeat_mods'], l:opts)
     if l:opts['silent']
