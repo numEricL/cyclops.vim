@@ -9,13 +9,14 @@ set cpo&vim
 silent! call _op_#init#settings#Load()
 
 vnoremap <expr> <plug>(dot#vdot) _op_#dot#VisRepeatMap()
-noremap <expr> <plug>(pair#next) _op_#pair#PairRepeatMap('next')
-noremap <expr> <plug>(pair#prev) _op_#pair#PairRepeatMap('prev')
+ noremap <expr> <plug>(pair#next) _op_#pair#PairRepeatMap('next')
+ noremap <expr> <plug>(pair#prev) _op_#pair#PairRepeatMap('prev')
 
 if !g:cyclops_no_mappings
-    vnoremap . <plug>(dot#vdot)
-    noremap ; <plug>(pair#next)
-    noremap , <plug>(pair#prev)
+    vmap . <plug>(dot#vdot)
+     map ; <plug>(pair#next)
+     map , <plug>(pair#prev)
+
     noremap <expr> f pair#NoremapNext(['f', 'F'])
     noremap <expr> F pair#NoremapPrev(['f', 'F'])
     noremap <expr> t pair#NoremapNext(['t', 'T'])
