@@ -373,7 +373,6 @@ function s:GetCharFromUser(handle) abort
     let l:match_ids = []
     " extra typeahead may be available if user typed fast
     if !getchar(1)
-        call _op_#utils#RestoreState(a:handle['state'])
         let l:match_ids = s:SetInteractiveElements(a:handle, l:mode)
     endif
 
@@ -412,6 +411,7 @@ function s:SetInteractiveElements(handle, mode) abort
         let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
         call add(l:match_ids, matchadd(l:cursor_hl, '\%' .. line('.') .. 'l\%' .. (col('.')+1) .. 'c'))
     elseif a:mode ==# 'o'
+        call _op_#utils#RestoreState(a:handle['state'])
         unsilent echo 'Operator Input:' .. s:input_stream
         let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
         if a:handle['init']['mode'] =~# '\v^[vV]$'
@@ -425,11 +425,10 @@ function s:SetInteractiveElements(handle, mode) abort
         call add(l:match_ids, matchadd(l:cursor_hl, '\%' .. line('.') .. 'l\%' .. col('.') .. 'c'))
     elseif a:mode ==# 'c'
         unsilent echo s:hijack['cmd_type'] .. s:hijack['cmd']
-        let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
-        let l:input = (s:hijack['cmd_type'] == s:input_stream[0])? s:input_stream[1:] : s:input_stream
         if s:hijack['cmd_type'] =~# '\v[/?]' && &incsearch
+            let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
+            let l:input = (s:hijack['cmd_type'] == s:input_stream[0])? s:input_stream[1:] : s:input_stream
             nohlsearch
-            call add(l:match_ids, matchadd(l:cursor_hl, '\%' .. line('.') .. 'l\%' .. col('.') .. 'c'))
             silent! call add(l:match_ids, matchadd('IncSearch', l:input))
         endif
     else
