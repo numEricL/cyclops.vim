@@ -68,6 +68,9 @@ limitations:
 
 ## Limitations
 
+Prompts (such as from the input() function) are discarded, however input will
+still be displayed in the command line.
+
 `iminsert` is enabled while processing mappings, this may have unintended side
 effects if language mappings (`:lmap`) are used. A workaround could be
 implemented.
