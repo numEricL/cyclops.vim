@@ -35,7 +35,7 @@ endfunction
 
 function _op_#utils#GetVisualState() abort
     if mode(0) !~# '\v^[nvV]$'
-        call _op_#op#Throw('cyclops.vim: unsupported mode for restoring visual state: ' .. mode(1))
+        call _op_#op#Throw('unsupported mode for restoring visual state: ' .. mode(1))
     endif
     return [ mode(), getpos("'<"), getpos("'>"), visualmode(), getpos('v'), getpos('.') ]
 endfunction
@@ -44,7 +44,7 @@ function _op_#utils#RestoreVisualState(v_state) abort
     let [ l:mode, l:vmark_start, l:vmark_end, l:visual_mode, l:v_start, l:v_end ] = a:v_state
 
     if mode(0) !~# '\v^[nvV]$'
-        call _op_#op#Throw('cyclops.vim: unsupported mode for restoring visual state: ' .. mode(1))
+        call _op_#op#Throw('unsupported mode for restoring visual state: ' .. mode(1))
     endif
 
     " reset the previous visualmode (e.g. for gv)

@@ -77,7 +77,7 @@ function _op_#log#PModes(kind) abort
     elseif a:kind == 2
         return '(' .. mode(1) .. '|' .. l:hmode .. ')'
     else
-        call _op_#op#Throw('cyclops.vim: invalid PModes kind ' .. string(a:kind))
+        call _op_#op#Throw('Invalid PModes kind ' .. string(a:kind))
     endif
 endfunction
 
