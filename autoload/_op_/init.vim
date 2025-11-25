@@ -104,7 +104,11 @@ function _op_#init#RegisterMap(mapping_type, map) abort
             silent! remove(l:rhs_mapinfo, l:key)
         endif
     endfor
-    call mapset(l:rhs_mapinfo)
+    try
+        call mapset(l:rhs_mapinfo)
+    catch /^Vim\%((\a\+)\)\=:E119:/
+        call mapset(l:mode, 0, l:rhs_mapinfo)
+    endtry
     return l:plugmap
 endfunction
 

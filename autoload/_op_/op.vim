@@ -129,7 +129,7 @@ function s:ComputeMapOnStack(handle) abort
     if _op_#stack#Depth() == 1
         let s:ambiguous_map_chars = s:StealTypeaheadTruncated()
         if s:ambiguous_map_chars =~# '\v' .. "\<esc>" .. '{' .. g:cyclops_max_trunc_esc .. '}$'
-            call _op_#op#Throw('cyclops.vim: Typeahead overflow while setting ambiguous_map_chars')
+            call _op_#op#Throw('Typeahead overflow while setting ambiguous_map_chars')
         endif
         if !empty(s:ambiguous_map_chars)
             call s:Log('ComputeMapOnStack', '', 'ambiguous map chars=' .. s:ambiguous_map_chars)
@@ -238,7 +238,7 @@ endfunction
 
 function s:CheckForProbeErrors() abort
     if s:probe_exception['status']
-        call _op_#op#Throw('cyclops.vim: Exception detected while processing ' .. s:probe_exception['expr'] .. ': ' .. s:probe_exception['exception'])
+        call _op_#op#Throw('Exception detected while processing ' .. s:probe_exception['expr'] .. ': ' .. s:probe_exception['exception'])
     endif
 endfunction
 
@@ -361,7 +361,7 @@ function s:ParentCallUpdate(handle) abort
     let l:update_pattern = '\V' .. escape(l:parent_handle['expr']['reduced_so_far'], '\') .. '\zs' .. escape(a:handle['parent_call'], '\')
     let l:update = substitute(l:parent_handle['expr']['reduced'], l:update_pattern, escape(l:expr, '\'), '')
     if l:update ==# l:parent_handle['expr']['reduced']
-        call _op_#op#Throw('cyclops.vim: "unexpected error while updating parent call"')
+        call _op_#op#Throw('Unexpected error while updating parent call')
     endif
     call s:Log('ParentCallUpdate', '', l:parent_handle['expr']['reduced'] .. ' -> ' .. l:update)
     let l:parent_handle['expr']['reduced'] = l:update
@@ -383,7 +383,7 @@ function s:GetCharFromUser(handle) abort
     endtry
 
     if empty(l:char)
-        call _op_#op#Throw('cyclops.vim: empty char received from user')
+        call _op_#op#Throw('Empty char received from user')
     endif
 
     call s:Log('GetCharFromUser', s:PModes(2), 'GOT char=' .. l:char)
@@ -398,7 +398,7 @@ function s:HModeToMapMode(hmode) abort
     elseif a:hmode =~# '\v^(c|c-l)$'
         return 'c'
     else
-        call _op_#op#Throw('cyclops.vim: unsupported hijack mode ' .. string(a:hmode))
+        call _op_#op#Throw('Unsupported hijack mode: "' .. string(a:hmode) .. '". Please make a feature request.')
     endif
 endfunction
 
@@ -431,8 +431,6 @@ function s:SetInteractiveElements(handle, mode) abort
             nohlsearch
             silent! call add(l:match_ids, matchadd('IncSearch', l:input))
         endif
-    else
-        throw 'cyclops.vim: unsupported interactive mode ' .. string(a:mode))
     endif
 
     redraw
@@ -454,12 +452,12 @@ function s:GetCharStr(mode) abort
         if !empty(a:mode) && !empty(maparg('<c-c>', a:mode))
             let l:char = "\<c-c>"
         else
-            call _op_#op#Throw('cyclops.vim: interrupt (<c-c>)')
+            call _op_#op#Throw('interrupt (<c-c>)')
         endif
     endtry
 
     if a:mode !=# 'i' && l:char ==# "\<esc>"
-        call _op_#op#Throw('cyclops.vim: interrupt (<esc>)')
+        call _op_#op#Throw('interrupt (<esc>)')
     endif
 
     return l:char
@@ -487,13 +485,13 @@ function s:GetCharFromTypeahead(handle) abort
     if !empty(l:parent_typeahead)
         let l:parent_handle['expr']['reduced'] = matchstr(l:parent_handle['expr']['reduced'], '\V\^\.\{-}' .. l:handle['parent_call']) .. strcharpart(l:parent_typeahead, 1)
         if  !empty(l:nr) && ( l:char !=# strcharpart(l:parent_typeahead, 0, 1) )
-            call _op_#op#Throw('cyclops.vim: Typeahead mismatch while processing operator')
+            call _op_#op#Throw('Typeahead mismatch while processing operator')
         endif
         let l:char = strcharpart(l:parent_typeahead, 0, 1)
     endif
 
     if empty(l:char)
-        call _op_#op#Throw('cyclops.vim: empty typeahead char received from typeahead stack')
+        call _op_#op#Throw('Empty typeahead char received from typeahead stack')
     endif
 
     return l:char
@@ -523,13 +521,13 @@ function s:StealTypeahead() abort
     while getchar(1)
         let l:char = getcharstr(0)
         if empty(l:char)
-            call _op_#op#Throw('cyclops.vim: empty typeahead char received while stealing typeahead')
+            call _op_#op#Throw('Empty typeahead char received while stealing typeahead')
         endif
         let l:typeahead ..= l:char
         if strchars(l:typeahead) > g:cyclops_max_input_size
             call s:Log('STEALTYPEAHEAD', '', 'TYPEAHEAD OVERFLOW')
             call s:Log('', '', l:typeahead[0:30] .. '...')
-            call _op_#op#Throw('cyclops.vim: Typeahead overflow while reading typeahead (incomplete command called in normal mode?)')
+            call _op_#op#Throw('Typeahead overflow while reading typeahead (incomplete command called in normal mode?)')
         endif
     endwhile
     return l:typeahead
@@ -542,7 +540,7 @@ function s:StealTypeaheadTruncated() abort
     while !empty(getcharstr(1)) && l:count < g:cyclops_max_trunc_esc
         let l:char = getcharstr(0)
         if empty(l:char)
-            call _op_#op#Throw('cyclops.vim: empty typeahead char received while stealing typeahead')
+            call _op_#op#Throw('Empty typeahead char received while stealing typeahead')
         endif
         let l:count = (l:char ==# "\<esc>")? l:count+1 : 0
         let l:typeahead ..= l:char
@@ -605,7 +603,7 @@ function _op_#op#ExprWithModifiers(expr, mods, opts, ...) abort
 endfunction
 
 function _op_#op#Throw(...)
-    let l:exception = a:0? a:1 : v:exception
+    let l:exception = a:0? 'cyclops.vim: ' .. a:1 : v:exception
     try
         throw 'op#abort'
     catch /op#abort/
