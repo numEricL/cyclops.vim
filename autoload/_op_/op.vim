@@ -193,7 +193,7 @@ function s:HijackInput(handle) abort
 
     if s:hijack['hmode'] =~# s:operator_hmode_pattern
         if a:handle['init']['input_source'] ==# 'user'
-            let l:input_stream = s:GetUserInput(a:handle, l:input_stream)
+            let l:input_stream = s:HijackUserInput(a:handle, l:input_stream)
         else
             while s:hijack['hmode'] =~# s:operator_hmode_pattern
                 let l:input_stream ..= s:GetCharFromTypeahead(a:handle)
@@ -221,7 +221,7 @@ function s:HijackInput(handle) abort
     return l:input_stream
 endfunction
 
-function s:GetUserInput(handle, input_stream) abort
+function s:HijackUserInput(handle, input_stream) abort
     let l:op = a:handle['expr']['op']
     let l:expr = a:handle['expr']['reduced']
     let l:input_stream = a:input_stream
