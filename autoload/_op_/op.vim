@@ -226,7 +226,9 @@ function s:HijackUserInput(handle, input_stream) abort
     let l:expr = a:handle['expr']['reduced']
     let l:input_stream = a:input_stream
     if s:hijack['cmd_type'] ==# '@'
+        call s:Log('HijackUserInput', s:PModes(2), 'FEED_x!: ' .. l:op .. l:expr .. l:input_stream)
         let l:reg = getreginfo('i')
+        call _op_#utils#RestoreState(a:handle['state'])
         call feedkeys('qi', 'n')
         call feedkeys(l:op .. l:expr .. l:input_stream, 'x!')
         call feedkeys('q', 'nx')
@@ -444,7 +446,7 @@ function s:SetInteractiveElements(handle, mode, input_stream) abort
             let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
             let l:input = (s:hijack['cmd_type'] == a:input_stream[0])? a:input_stream[1:] : a:input_stream
             nohlsearch
-            silent! call add(l:match_ids, matchadd('IncSearch', l:input))
+            call add(l:match_ids, matchadd('IncSearch', l:input))
         endif
     endif
 
@@ -631,7 +633,7 @@ endfunction
 
 " only used for logging
 function _op_#op#GetLastHijackMode() abort
-    return s:hijack['hmode']
+    return s:hijack
 endfunction
 
 let &cpo = s:cpo

@@ -53,7 +53,7 @@ function _op_#dot#VisRepeatMap() abort
         return '.'
     endif
     call s:InitRepeatCallback(l:handle)
-    let l:handle['repeat']['vdot'] = v:true
+    let l:handle['repeat']['vdot_init'] = v:true
     return "\<esc>."
 endfunction
 
@@ -76,7 +76,6 @@ function s:InitRepeatCallback(handle) abort
     call extend(a:handle, { 'repeat' : {
                 \ 'mode'     : mode(1),
                 \ 'curpos'   : getcurpos(),
-                \ 'vdot'     : mode(0) =~# '\v^[vV]$'
                 \ } } )
     call extend(a:handle, { 'repeat_mods': {
                 \ 'count'    : l:count,
@@ -87,20 +86,34 @@ endfunction
 function _op_#dot#RepeatCallback(dummy) abort
     let l:handle = _op_#op#GetStoredHandle('dot')
     " normal mode dot initializes here, visdot initializes in <expr> map
-    if has_key(l:handle, 'repeat') && l:handle['repeat']['vdot'] == v:true
+    if has_key(l:handle, 'repeat') && get(l:handle['repeat'], 'vdot_init')
         " reset for next dot call
-        let l:handle['repeat']['vdot'] = v:false
+        let l:handle['repeat']['vdot_init'] = v:false
     else
         call s:InitRepeatCallback(l:handle)
     endif
-    call s:RestoreRepeatEntry(l:handle)
-    " ensure that 3<dot> is the same as <dot><dot><dot>
-    let l:opts = extend({'accepts_count': v:false}, l:handle['opts'], 'keep')
-    let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:handle['repeat_mods'], l:opts)
-    if l:opts['silent']
-        silent call feedkeys(l:expr_with_modifiers, 'x!')
+
+    if l:handle['opts']['accepts_count']
+        let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:handle['repeat_mods'], l:handle['opts'])
+        call s:RestoreRepeatEntry(l:handle)
+        if l:handle['opts']['silent']
+            silent call feedkeys(l:expr_with_modifiers, 'x!')
+        else
+            call feedkeys(l:expr_with_modifiers, 'x!')
+        endif
     else
-        call feedkeys(l:expr_with_modifiers, 'x!')
+        let l:mods = extend({'count': 0}, l:handle['repeat_mods'], 'keep')
+        let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:mods, l:handle['opts'])
+        let l:count1 = max([1, l:handle['repeat_mods']['count']])
+        for _ in range(l:count1)
+            call s:RestoreRepeatEntry(l:handle)
+            if l:handle['opts']['silent']
+                silent call feedkeys(l:expr_with_modifiers, 'x!')
+            else
+                call feedkeys(l:expr_with_modifiers, 'x!')
+            endif
+            call s:InitRepeatCallback(l:handle)
+        endfor
     endif
     let &operatorfunc = '_op_#dot#RepeatCallback'
 endfunction
@@ -111,7 +124,7 @@ function s:RestoreRepeatEntry(handle) abort
 
     " if initiated in operator-pending mode then treat like normal mode
     if l:imode[0] ==# 'n' && l:rmode ==# 'n'
-        " call setpos('.', a:handle['repeat']['curpos'])
+        " nothing needed
     elseif l:imode =~# '\v^[vV]$' && l:rmode ==# 'n'
         " shift visual marks to cursor
         let l:v_beg = s:ShiftPos(a:handle['repeat']['curpos'], a:handle['marks']['v'], a:handle['marks']['.'])
