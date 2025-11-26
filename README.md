@@ -7,10 +7,10 @@ any vim/neovim map or operator.
 
 * Build or extend operators that support dot `.` or pair `;` `,` repeating
 * Works with all mappings, with and without input
+* Supports dot and pair repeat in visual mode
 * Easy to configure: no changes needed to existing mappings
 * Dot repeat does not interfere with any other source dot repeat functionality
 * Operator input is interactive! Use the backspace key to erase incorrect input
-* No macro recording used, doesn't interfere with user macros
 
 ## What it does
 
@@ -55,28 +55,25 @@ repeats the mapping literally count times.
 
 ## Why not a related plugin?
 
-Other plugins for repeating mappings has one or more of the following
+Another plugin for repeating mappings may have one or more of the following
 limitations:
 
-* requires plugin authors to support your framework
-* only work with maps that update the change marks
-* only work with movement mappings or mappings without user input
-* relies on constantly repeating autocommands or macro recording
-* cannot be nested
+* requires plugin authors to support its framework
+* overrides the default `.` behavior
+* only works with maps that update the change marks
+* only works with movement mappings or mappings without user input
 * no support for visual mode
-* not interactive
+* cannot be nested
 
 ## Limitations
-
-Prompts (such as from the input() function) are discarded, however input will
-still be displayed in the command line.
 
 `iminsert` is enabled while processing mappings, this may have unintended side
 effects if language mappings (`:lmap`) are used. A workaround could be
 implemented.
 
 This plugin is effectively disabled during macro recording due to unpredictable
-behavior when mixing macros and feedkeys
+behavior when mixing macros and feedkeys. All mappings work as normal, but
+repeat functionality is disabled.
 
 ## Sample usage:
 
