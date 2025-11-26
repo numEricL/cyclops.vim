@@ -65,10 +65,11 @@ function _op_#log#Pad(value, length) abort
 endfunction
 
 function _op_#log#PModes(kind) abort
-    let l:hmode = _op_#op#GetLastHijackMode()
+    let l:hijack = _op_#op#GetLastHijack()
 
-    let l:hmode =           empty(l:hmode)? '-'   : l:hmode
+    let l:hmode = empty(l:hijack['hmode'])? '-'   : l:hijack['hmode']
     let l:hmode = (l:hmode ==# 'consumed')? 'cns' : l:hmode
+    let l:hmode ..= empty(l:hijack['cmd_type'])? '' : '|' .. l:hijack['cmd_type']
 
     if a:kind == 0
         return '(' .. mode(1) .. '|)'
