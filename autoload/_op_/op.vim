@@ -434,7 +434,7 @@ function s:SetInteractiveElements(handle, mode, input_stream) abort
             let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
             let l:input = (s:hijack['cmd_type'] == a:input_stream[0])? a:input_stream[1:] : a:input_stream
             nohlsearch
-            call add(l:match_ids, matchadd('IncSearch', l:input))
+            silent! call add(l:match_ids, matchadd('IncSearch', l:input))
         endif
     endif
 
@@ -620,7 +620,7 @@ function _op_#op#Throw(...)
 endfunction
 
 " only used for logging
-function _op_#op#GetLastHijackMode() abort
+function _op_#op#GetLastHijack() abort
     return s:hijack
 endfunction
 
