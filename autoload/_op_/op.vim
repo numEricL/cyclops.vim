@@ -225,18 +225,18 @@ function s:HijackUserInput(handle, input_stream) abort
     let l:op = a:handle['expr']['op']
     let l:expr = a:handle['expr']['reduced']
     let l:input_stream = a:input_stream
-    if s:hijack['cmd_type'] ==# '@'
-        call s:Log('HijackUserInput', s:PModes(2), 'FEED_x!: ' .. l:op .. l:expr .. l:input_stream)
-        let l:reg = getreginfo('i')
-        call _op_#utils#RestoreState(a:handle['state'])
-        call feedkeys('qi', 'n')
-        call feedkeys(l:op .. l:expr .. l:input_stream, 'x!')
-        call feedkeys('q', 'nx')
-        let l:input_stream ..= getreg('i')
-        call setreg('i', l:reg)
-        let s:hijack = { 'hmode': 'n', 'cmd': '', 'cmd_type': '' }
-    else
-        while s:hijack['hmode'] =~# s:operator_hmode_pattern
+    while s:hijack['hmode'] =~# s:operator_hmode_pattern
+        if s:hijack['cmd_type'] ==# '@'
+            call s:Log('HijackUserInput', s:PModes(2), 'FEED_x!: ' .. l:op .. l:expr .. l:input_stream)
+            let l:reg = getreginfo('i')
+            call _op_#utils#RestoreState(a:handle['state'])
+            call feedkeys('qi', 'n')
+            call feedkeys(l:op .. l:expr .. l:input_stream, 'x!')
+            call feedkeys('q', 'nx')
+            let l:input_stream ..= getreg('i')
+            call setreg('i', l:reg)
+            call s:ProbeExpr('', 'hijack input()')
+        else
             let l:char = s:GetCharFromUser(a:handle, l:input_stream)
             let l:input_stream = s:ProcessStream(l:input_stream, l:char)
             if s:hijack['hmode'] =~# s:fFtT_op_pending_pattern
@@ -245,10 +245,10 @@ function s:HijackUserInput(handle, input_stream) abort
             endif
             call _op_#utils#RestoreState(a:handle['state'])
             call s:ProbeExpr(l:op .. l:expr .. l:input_stream, 'hijack')
-        endwhile
-        unsilent echo
-        redraw
-    endif
+        endif
+    endwhile
+    unsilent echo
+    redraw
     return l:input_stream
 endfunction
 

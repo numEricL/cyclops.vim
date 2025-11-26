@@ -1,13 +1,13 @@
 # cyclops.vim
 
 The simplest yet most powerful way to add dot `.` and pair `;` `,` repeat to
-any vim/neovim map or operator.
+maps and operators
 
 ## Features
 
 * Build or extend operators that support dot `.` or pair `;` `,` repeating
-* Works with all mappings, with and without input
-* Supports dot and pair repeat in visual mode
+* Works with normal, visual, and command mode mappings
+* Supports mappings that expect user input
 * Easy to configure: no changes needed to existing mappings
 * Dot repeat does not interfere with any other source dot repeat functionality
 * Operator input is interactive! Use the backspace key to erase incorrect input
@@ -65,6 +65,58 @@ limitations:
 * no support for visual mode
 * cannot be nested
 
+## Comparison with vim-repeat
+
+[vim-repeat](https://github.com/tpope/vim-repeat) is by far the most popular
+plugin for adding dot `.` repeat functionality to custom mappings. It's mature.
+supremely lightweight, and offers a seamless dot repeatable experience when
+combined with other plugins like the well regarded [vim-surround](https://github.com/tpope/vim-surround).
+However, there are some limitations to vim-repeat's approach that prevent it
+from adding dot repeat functionality to all vim-surround mappings, notably:
+
+* visual mode mappings
+* mappings with custom user functions that prompt for input
+
+In particular, vim-surround's experimental support for user prompted input can
+be used to add LaTeX environment surrounds (see vim-surround's documentation for
+more details). To enable, set the following global variable to tell vim-surround
+to use it on `l` input:
+
+``` vim
+let g:surround_108 = "\\begin{\1environment: \1}\r\\end{\1\1}"
+```
+
+now `ysiwl` will prompt for an environment name and wrap the current word in
+latex begin/end tags. Attempting to repeat this with `.` when using vim-repeat
+will prompt the user for input again, rather than repeating the original input.
+cyclops.vim fully supports this use case, as well as all other vim-surround
+mappings, in both normal and visual mode. 
+
+To use cyclops.vim to add dot repeat functionality + other goodies to [tpope/vim-surround](https://github.com/tpope/vim-surround)
+add the following to your vimrc:
+
+``` vim
+let g:surround_no_mappings = 1
+nmap <expr> ds  dot#Map('<Plug>Dsurround')
+nmap <expr> cs  dot#Map('<Plug>Csurround')
+nmap <expr> cS  dot#Map('<Plug>CSurround')
+nmap <expr> ys  dot#Map('<Plug>Ysurround')
+nmap <expr> yS  dot#Map('<Plug>YSurround')
+nmap <expr> yss dot#Map('<Plug>Yssurround')
+nmap <expr> ySs dot#Map('<Plug>YSsurround')
+nmap <expr> ySS dot#Map('<Plug>YSsurround')
+xmap <expr> S   dot#Map('<Plug>VSurround')
+xmap <expr> gS  dot#Map('<Plug>VgSurround')
+```
+
+## Visual mode dot repeat
+
+Cyclops.vim adds a visual mode mapping for `.` that allows repeating managed
+mappings in visual mode. If the map was originally executed in visual mode,
+visual mode repeat uses the new visual selection when repeating the mapping. If
+the map was originally executed in normal mode, cyclops.vim re-enters visual
+mode but shifts the visual selection relative to the new cursor position.
+
 ## Limitations
 
 `iminsert` is enabled while processing mappings, this may have unintended side
@@ -77,22 +129,8 @@ repeat functionality is disabled.
 
 ## Sample usage:
 
-Add dot repeat functionality + other goodies to [tpope/vim-surround](https://github.com/tpope/vim-surround)
-``` vim
-let g:surround_no_mappings = 1
-nmap <expr> ds  dot#Map('<Plug>Dsurround')
-nmap <expr> cs  dot#Map('<Plug>Csurround')
-nmap <expr> cS  dot#Map('<Plug>CSurround')
-nmap <expr> ys  dot#Map('<Plug>Ysurround')
-nmap <expr> yS  dot#Map('<Plug>YSurround')
-nmap <expr> yss dot#Map('<Plug>Yssurround')
-nmap <expr> ySs dot#Map('<Plug>YSsurround')
-nmap <expr> ySS dot#Map('<Plug>YSsurround')
-xmap <expr> s   dot#Map('<Plug>VSurround')
-xmap <expr> gs  dot#Map('<Plug>VgSurround')
-```
-
 Add pair repeat functionality with `;` `,` to window resizing:
+
 ``` vim
 nmap <expr> <c-w>> pair#NoremapNext(['<c-w>>', '<c-w><'], {'accepts_register': 0})
 nmap <expr> <c-w>< pair#NoremapPrev(['<c-w>>', '<c-w><'], {'accepts_register': 0})
@@ -115,12 +153,14 @@ call pair#SetMap('map', ['<c-j>', '<c-k>'])
 ```
 
 Extend dot `d`
+
 ``` vim
 nmap <expr> d dot#Noremap('d')
 vmap <expr> d dot#Noremap('d')
 ```
 
 Create a (dot repeatable) operator from composition: Search for a pattern, then change the whole word:
+
 ``` vim
 nmap <expr> <plug>(search) op#Noremap('/')
 nmap <expr> <plug>(change) op#Noremap('ciw')
