@@ -37,7 +37,7 @@ function _op_#pair#PairRepeatMap(dir) abort
         " map must be computed first
         let l:stack_handle = _op_#op#StackInit()
         call _op_#op#InitCallback(l:stack_handle, 'pair', l:stored_handle['pair']['orig'][l:id], l:stored_handle['opts'])
-        let l:stack_handle['expr']['input_source'] = 'cache'
+        let l:stack_handle['init']['input_source'] = 'cache'
         let l:stack_handle['expr']['inputs'] = deepcopy(l:stored_handle['expr']['inputs'])
         let l:stack_handle['pair'] = l:stored_handle['pair']
         let l:stack_handle['pair']['id'] = l:id
