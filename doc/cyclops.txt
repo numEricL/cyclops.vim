@@ -45,7 +45,7 @@ Now typing `/foo<CR>` followed by |.| will search for "foo" again.
 
 Example - Extend the built-in delete operator: >
     nmap <expr> d dot#Noremap('d')
-    vmap <expr> d dot#Noremap('d')
+    xmap <expr> d dot#Noremap('d')
 <
 
 ------------------------------------------------------------------------------
