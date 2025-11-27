@@ -108,7 +108,7 @@ function pair#SetMaps(mapping_type, pairs, ...) abort
     else
         call s:SetMapDeprecated(a:mapping_type, a:pairs, l:opts_dict)
     endif
-    call _op_#init#DeprecationNotice('pair#SetMaps is deprecated. Please use pair#SetMap for individual mappings. Supress this message with g:cyclops_suppress_deprecation_warnings')
+    call _op_#init#DeprecationNotice('pair#SetMaps is deprecated. Please use pair#SetMap for individual mappings. Suppress this message with g:cyclops_suppress_deprecation_warnings')
 endfunction
 
 function s:SetMapDeprecated(mapping_type, pair, opts_dict) abort

@@ -66,7 +66,7 @@ function dot#SetMaps(mapping_type, maps, ...) abort
     else
         call s:SetMapDeprecated(a:mapping_type, a:maps, l:opts_dict)
     endif
-    call _op_#init#DeprecationNotice('dot#SetMaps is deprecated. Please use dot#SetMap for individual mappings. Supress this message with g:cyclops_suppress_deprecation_warnings')
+    call _op_#init#DeprecationNotice('dot#SetMaps is deprecated. Please use dot#SetMap for individual mappings. Suppress this message with g:cyclops_suppress_deprecation_warnings')
 endfunction
 
 function s:SetMapDeprecated(mapping_type, map, opts_dict) abort
