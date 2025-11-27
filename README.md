@@ -47,7 +47,7 @@ increase or decrease the window width again. The options dictionary
 `{'accepts_register': 0}` specifies that cyclops.vim should not supply the
 default register to the mapping.
 
-Defaults are located in `autoload/init/settings.vim` and can be overridden by
+Defaults are located in `autoload/_op_/init/settings.vim` and can be overridden by
 defining `g:cyclops_map_defaults` dictionary. Settings work similarly. By
 default it is assumed that mappings accept registers and counts. If a mapping is
 specified to not accept a count but a count is provided anyway, cyclops.vim

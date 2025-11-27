@@ -1,0 +1,368 @@
+*cyclops.txt*  Add dot and pair repeat to custom mappings
+
+Author:  Eric Larson
+License: Mozilla Public License Version 2.0
+
+==============================================================================
+CONTENTS                                                     *cyclops-contents*
+
+    1. Introduction ...................... |cyclops-intro|
+    2. Usage ............................. |cyclops-usage|
+        2.1 Dot Repeat ................... |cyclops-dot|
+        2.2 Pair Repeat .................. |cyclops-pair|
+        2.3 Operators .................... |cyclops-op|
+    3. Functions ......................... |cyclops-functions|
+        3.1 Dot Functions ................ |cyclops-dot-functions|
+        3.2 Pair Functions ............... |cyclops-pair-functions|
+        3.3 Operator Functions ........... |cyclops-op-functions|
+    4. Configuration ..................... |cyclops-config|
+    5. Mappings .......................... |cyclops-mappings|
+    6. Visual Mode ....................... |cyclops-visual|
+    7. Examples .......................... |cyclops-examples|
+    8. Limitations ....................... |cyclops-limitations|
+
+==============================================================================
+1. INTRODUCTION                                                 *cyclops-intro*
+
+cyclops.vim enables dot |.| and pair |;| |,| repeating of mappings.
+
+==============================================================================
+2. USAGE                                                        *cyclops-usage*
+
+------------------------------------------------------------------------------
+2.1 DOT REPEAT                                                   *cyclops-dot*
+
+Add dot |.| repeat functionality to a mapping by wrapping it with
+|dot#Map()| or |dot#Noremap()|. Normal, visual, and operator-pending mode mappings
+are supported.
+
+The <expr> attribute is required for using these functions.
+
+Example - Make search repeatable with dot: >
+    nmap <expr> / dot#Noremap('/')
+<
+Now typing `/foo<CR>` followed by |.| will search for "foo" again.
+
+Example - Extend the built-in delete operator: >
+    nmap <expr> d dot#Noremap('d')
+    vmap <expr> d dot#Noremap('d')
+<
+
+------------------------------------------------------------------------------
+2.2 PAIR REPEAT                                                 *cyclops-pair*
+
+Add pair repeat functionality with |;| and |,| to bidirectional commands.
+Use |pair#NoremapNext()| and |pair#NoremapPrev()| for the forward and
+backward directions.
+
+By default, |;| and |,| are mapped in normal, visual, select, and
+operator-pending modes. The maps you define with pair repeat should be
+mapped in the same modes to ensure consistent behavior.
+
+Example - Window resizing: >
+    nmap <expr> <c-w>> pair#NoremapNext(['<c-w>>', '<c-w><'],
+                      \ {'accepts_register': 0})
+    nmap <expr> <c-w>< pair#NoremapPrev(['<c-w>>', '<c-w><'],
+                      \ {'accepts_register': 0})
+<
+Now after executing `<c-w>>` or `<c-w><`, pressing |;| or |,| will continue
+resizing the window.
+
+Example - Scrolling: >
+    noremap <c-l> zL
+    noremap <c-h> zH
+    call pair#SetMap('map', ['<c-l>', '<c-h>'])
+<
+
+------------------------------------------------------------------------------
+2.3 OPERATORS                                                     *cyclops-op*
+
+The |op#Map()| and |op#Noremap()| functions behave like |dot#Map()| and
+|dot#Noremap()| but are not dot-repeatable themselves. They are intended to be
+used as building blocks for composing custom operators.
+
+Example - Search then change word: >
+    nmap <expr> <plug>(search) op#Noremap('/')
+    nmap <expr> <plug>(change) op#Noremap('ciw')
+    nmap <expr> R dot#Map('<plug>(search)<plug>(change)')
+<
+
+==============================================================================
+3. FUNCTIONS                                                *cyclops-functions*
+
+------------------------------------------------------------------------------
+3.1 DOT FUNCTIONS                                      *cyclops-dot-functions*
+
+dot#Map({map} [, {opts}])                                          *dot#Map()*
+    Wrap a mapping to add dot repeat functionality.
+
+    Parameters:~
+        {map}   String containing the mapping sequence
+        {opts}  Optional dictionary of options (see |cyclops-config|)
+
+    Returns:~
+        String to be used in an <expr> mapping
+
+    Example: >
+        nmap <expr> cs dot#Map('<Plug>Csurround')
+<
+
+dot#Noremap({map} [, {opts}])                                  *dot#Noremap()*
+    Like |dot#Map()| but for noremap-style mappings. This registers the
+    mapping internally to avoid recursive expansion.
+
+    Parameters:~
+        {map}   String containing the mapping sequence
+        {opts}  Optional dictionary of options (see |cyclops-config|)
+
+    Returns:~
+        String to be used in an <expr> mapping
+
+    Example: >
+        nmap <expr> / dot#Noremap('/')
+<
+
+dot#SetMap({mapping_type}, {map} [, {opts}])                   *dot#SetMap()*
+    Add dot repeat to an existing mapping without redefining it. Useful when a
+    plugin defines mappings without letting the user choose the mapping keys.
+
+    Parameters:~
+        {mapping_type}  'map', 'nmap', 'vmap', etc.
+        {map}           String containing the mapping key sequence
+        {opts}          Optional dictionary of options (see |cyclops-config|)
+
+    Example: >
+        call dot#SetMap('nmap', '<leader>x')
+<
+
+------------------------------------------------------------------------------
+3.2 PAIR FUNCTIONS                                    *cyclops-pair-functions*
+
+pair#MapNext({pair} [, {opts}])                               *pair#MapNext()*
+    Wrap the forward direction of a pair of mappings.
+
+    Parameters:~
+        {pair}  List with two mappings [forward, backward]
+        {opts}  Optional dictionary of options (see |cyclops-config|)
+
+    Returns:~
+        String to be used in an <expr> mapping
+
+pair#MapPrev({pair} [, {opts}])                               *pair#MapPrev()*
+    Wrap the backward direction of a pair of mappings.
+
+    Parameters:~
+        {pair}  List with two elements [forward, backward]
+        {opts}  Optional dictionary of options (see |cyclops-config|)
+
+    Returns:~
+        String to be used in an <expr> mapping
+
+pair#NoremapNext({pair} [, {opts}])                       *pair#NoremapNext()*
+    Like |pair#MapNext()| but for noremap-style mappings.
+
+    Parameters:~
+        {pair}  List with two elements [forward, backward]
+        {opts}  Optional dictionary of options (see |cyclops-config|)
+
+    Returns:~
+        String to be used in an <expr> mapping
+
+    Example: >
+        nmap <expr> <c-w>+ pair#NoremapNext(['<c-w>+', '<c-w>-'],
+                          \ {'accepts_register': 0})
+<
+
+pair#NoremapPrev({pair} [, {opts}])                       *pair#NoremapPrev()*
+    Like |pair#MapPrev()| but for noremap-style mappings.
+
+    Parameters:~
+        {pair}  List with two elements [forward, backward]
+        {opts}  Optional dictionary of options (see |cyclops-config|)
+
+    Returns:~
+        String to be used in an <expr> mapping
+
+pair#SetMap({mapping_type}, {pair} [, {opts}])                *pair#SetMap()*
+    Add pair repeat to existing mappings without redefining them. Useful when a
+    plugin defines mappings without letting the user choose the mapping keys.
+
+    Parameters:~
+        {mapping_type}  'map', 'nmap', 'vmap', etc.
+        {pair}          List with two elements [forward, backward]
+        {opts}          Optional dictionary of options (see |cyclops-config|)
+
+    Example: >
+        noremap <c-j> <c-d>
+        noremap <c-k> <c-u>
+        call pair#SetMap('map', ['<c-j>', '<c-k>'])
+<
+
+------------------------------------------------------------------------------
+3.3 OPERATOR FUNCTIONS                                  *cyclops-op-functions*
+
+op#Map({map} [, {opts}])                                            *op#Map()*
+    Create a custom operator without dot/pair repeat.
+
+    Parameters:~
+        {map}   String containing the mapping sequence
+        {opts}  Optional dictionary of options (see |cyclops-config|)
+
+    Returns:~
+        String to be used in an <expr> mapping
+
+op#Noremap({map} [, {opts}])                                    *op#Noremap()*
+    Like |op#Map()| but for noremap-style mappings.
+
+    Parameters:~
+        {map}   String containing the mapping sequence
+        {opts}  Optional dictionary of options (see |cyclops-config|)
+
+    Returns:~
+        String to be used in an <expr> mapping
+
+op#SetMap({mapping_type}, {map} [, {opts}])                     *op#SetMap()*
+    Convert an existing mapping to a cyclops operator.
+
+    Parameters:~
+        {mapping_type}  'map', 'nmap', 'vmap', etc.
+        {map}           String containing the mapping key sequence
+        {opts}          Optional dictionary of options (see |cyclops-config|)
+
+==============================================================================
+4. CONFIGURATION                                               *cyclops-config*
+
+*g:cyclops_no_mappings*
+    Set to 1 to disable default mappings. Default: 0
+
+    Example: >
+        let g:cyclops_no_mappings = 1
+<
+
+*g:cyclops_map_defaults*
+    Dictionary to override default options for all mappings.
+    See autoload/_op_/init/settings.vim for available options.
+
+    Available options:~
+        accepts_register  - Whether mapping accepts a register (default: 1)
+        accepts_count     - Whether mapping accepts a count (default: 1)
+
+    Example: >
+        let g:cyclops_map_defaults = {'accepts_register': 0}
+<
+
+Function Options~
+    The optional {opts} parameter in cyclops functions is a dictionary that
+    can contain:
+
+    accepts_register    Boolean (0 or 1). Whether the mapping accepts a
+                       register. Default: 1
+
+    accepts_count      Boolean (0 or 1). Whether the mapping accepts a count.
+                       If set to 0 but a count is provided, the mapping is
+                       literally repeated count times. Default: 1
+
+    Example: >
+        {'accepts_register': 0, 'accepts_count': 0}
+<
+
+==============================================================================
+5. MAPPINGS                                                  *cyclops-mappings*
+
+Default Mappings~
+
+Unless |g:cyclops_no_mappings| is set, cyclops.vim provides these mappings:
+
+    x_.                 dot repeat (visual mode)
+    ;                   Next pair repeat (normal, visual, select, operator-pending)
+    ,                   Previous pair repeat (normal, visual, select, operator-pending)
+    f, F, t, T          Retain built-in find/till behavior with counts
+                        (normal, select, visual, operator-pending)
+
+Plug Mappings~
+
+*<Plug>(dot#vdot)*
+    Visual mode dot repeat mapping
+
+*<Plug>(pair#next)*
+    Next direction pair repeat
+
+*<Plug>(pair#prev)*
+    Previous direction pair repeat
+
+==============================================================================
+6. VISUAL MODE                                                *cyclops-visual*
+
+cyclops.vim adds visual mode mapping for |.| that allows repeating managed
+mappings in visual mode.
+
+* If the map was originally executed in visual mode, repeat uses the new
+  visual selection.
+* If the map was originally executed in normal mode, cyclops.vim re-enters
+  visual mode and shifts the selection relative to the new cursor position.
+
+Example: >
+    xmap <expr> S dot#Map('<Plug>VSurround')
+<
+
+==============================================================================
+7. EXAMPLES                                                  *cyclops-examples*
+
+vim-surround Integration~
+>
+    let g:surround_no_mappings = 1
+    nmap <expr> ds  dot#Map('<Plug>Dsurround')
+    nmap <expr> cs  dot#Map('<Plug>Csurround')
+    nmap <expr> cS  dot#Map('<Plug>CSurround')
+    nmap <expr> ys  dot#Map('<Plug>Ysurround')
+    nmap <expr> yS  dot#Map('<Plug>YSurround')
+    nmap <expr> yss dot#Map('<Plug>Yssurround')
+    nmap <expr> ySs dot#Map('<Plug>YSsurround')
+    nmap <expr> ySS dot#Map('<Plug>YSsurround')
+    xmap <expr> S   dot#Map('<Plug>VSurround')
+    xmap <expr> gS  dot#Map('<Plug>VgSurround')
+<
+
+Window Management~
+>
+    " Resize
+    nmap <expr> <c-w>> pair#NoremapNext(['<c-w>>', '<c-w><'],
+                      \ {'accepts_register': 0})
+    nmap <expr> <c-w>< pair#NoremapPrev(['<c-w>>', '<c-w><'],
+                      \ {'accepts_register': 0})
+    nmap <expr> <c-w>+ pair#NoremapNext(['<c-w>+', '<c-w>-'],
+                      \ {'accepts_register': 0})
+    nmap <expr> <c-w>- pair#NoremapPrev(['<c-w>+', '<c-w>-'],
+                      \ {'accepts_register': 0})
+<
+
+Scrolling~
+>
+    noremap <c-l> zL
+    noremap <c-h> zH
+    noremap <c-j> <c-d>
+    noremap <c-k> <c-u>
+    call pair#SetMap('map', ['<c-l>', '<c-h>'])
+    call pair#SetMap('map', ['<c-j>', '<c-k>'])
+<
+
+Composed Operators~
+>
+    " Search for pattern, then change whole word
+    nmap <expr> <plug>(search) op#Noremap('/')
+    nmap <expr> <plug>(change) op#Noremap('ciw')
+    nmap <expr> R dot#Map('<plug>(search)<plug>(change)')
+<
+
+==============================================================================
+8. LIMITATIONS                                          *cyclops-limitations*
+
+* |iminsert| is enabled while processing mappings. This may have unintended
+  side effects if language mappings (|:lmap|) are used.
+
+* The plugin is disabled during macro recording due to unpredictable behavior
+  when mixing macros and |feedkeys()|. All mappings work normally, but repeat
+  functionality is disabled during macro recording/execution.
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:
