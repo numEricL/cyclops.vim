@@ -68,7 +68,7 @@ limitations:
 ## Comparison with vim-repeat
 
 [vim-repeat](https://github.com/tpope/vim-repeat) is by far the most popular
-plugin for adding dot `.` repeat functionality to custom mappings. It's mature.
+plugin for adding dot `.` repeat functionality to custom mappings. It's mature,
 supremely lightweight, and offers a seamless dot repeatable experience when
 combined with other plugins like the well regarded [vim-surround](https://github.com/tpope/vim-surround).
 However, there are some limitations to vim-repeat's approach that prevent it
