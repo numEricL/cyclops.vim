@@ -55,9 +55,9 @@ Add pair repeat functionality with |;| and |,| to bidirectional commands.
 Use |pair#NoremapNext()| and |pair#NoremapPrev()| for the forward and
 backward directions.
 
-By default, |;| and |,| are mapped in normal, visual, select, and
-operator-pending modes. The maps you define with pair repeat should be
-mapped in the same modes to ensure consistent behavior.
+By default, |;| and |,| are mapped in normal, visual, and operator-pending
+modes. The maps you define with pair repeat should be mapped in the
+same modes to ensure consistent behavior.
 
 Example - Window resizing: >
     nmap <expr> <c-w>> pair#NoremapNext(['<c-w>>', '<c-w><'],
@@ -273,11 +273,11 @@ Default Mappings~
 
 Unless |g:cyclops_no_mappings| is set, cyclops.vim provides these mappings:
 
-    x_.                 dot repeat (visual mode)
-    ;                   Next pair repeat (normal, visual, select, operator-pending)
-    ,                   Previous pair repeat (normal, visual, select, operator-pending)
+    .                   dot repeat (visual mode)
+    ;                   Next pair repeat (normal, visual, operator-pending)
+    ,                   Previous pair repeat (normal, visual, operator-pending)
     f, F, t, T          Retain built-in find/till behavior with counts
-                        (normal, select, visual, operator-pending)
+                        (normal, visual, operator-pending)
 
 Plug Mappings~
 
