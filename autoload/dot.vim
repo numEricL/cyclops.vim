@@ -9,7 +9,6 @@ silent! call _op_#init#settings#Load()
 
 let s:AssertExprMap     = function('_op_#init#AssertExprMap')
 let s:ExtendDefaultOpts = function('_op_#init#ExtendDefaultOpts')
-let s:StackInit         = function('_op_#op#StackInit')
 let s:RegisterNoremap   = function('_op_#init#RegisterNoremap')
 
 function dot#Map(map, ...) abort
@@ -17,12 +16,11 @@ function dot#Map(map, ...) abort
         if !empty(reg_recording()) || !empty(reg_executing())
         return a:map
     endif
-    let l:handle = s:StackInit()
+    let l:handle = _op_#op#StackInit()
     call _op_#op#InitCallback(l:handle, 'dot', a:map, s:ExtendDefaultOpts(a:000))
     call _op_#dot#InitCallback(l:handle)
-    let &operatorfunc = '_op_#dot#ComputeMapCallback'
     let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
-    return l:omap_esc .. 'g@' .. (mode(0) ==# 'n'? 'l' : '')
+    return l:omap_esc .. "\<cmd>call _op_#dot#ComputeMapCallback()\<cr>"
 endfunction
 
 function dot#Noremap(map, ...) abort
@@ -31,12 +29,11 @@ function dot#Noremap(map, ...) abort
         return a:map
     endif
     let l:map = s:RegisterNoremap(a:map)
-    let l:handle = s:StackInit()
+    let l:handle = _op_#op#StackInit()
     call _op_#op#InitCallback(l:handle, 'dot', l:map, s:ExtendDefaultOpts(a:000))
     call _op_#dot#InitCallback(l:handle)
-    let &operatorfunc = '_op_#dot#ComputeMapCallback'
     let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
-    return l:omap_esc .. 'g@' .. (mode(0) ==# 'n'? 'l' : '')
+    return l:omap_esc .. "\<cmd>call _op_#dot#ComputeMapCallback()\<cr>"
 endfunction
 
 function dot#SetMap(mapping_type, map, ...) abort
