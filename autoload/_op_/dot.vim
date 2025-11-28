@@ -45,7 +45,7 @@ endfunction
 function _op_#dot#VisRepeatMap() abort
     call _op_#init#AssertExprMap()
     let l:handle = _op_#op#GetStoredHandle('dot')
-    if !has_key(l:handle, 'init') || l:handle['init']['mode'] ==# 'n'
+    if !has_key(l:handle, 'init') || l:handle['init']['mode'] !~# '\v^[vV]$'
         return '.'
     endif
     call s:InitRepeatCallback(l:handle)
