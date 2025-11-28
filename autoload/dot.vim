@@ -13,7 +13,7 @@ let s:RegisterNoremap   = function('_op_#init#RegisterNoremap')
 
 function dot#Map(map, ...) abort
     call s:AssertExprMap()
-        if !empty(reg_recording()) || !empty(reg_executing())
+    if !empty(reg_recording()) || !empty(reg_executing())
         return a:map
     endif
     let l:handle = _op_#op#StackInit()
