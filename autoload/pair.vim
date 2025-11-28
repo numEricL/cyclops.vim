@@ -1,5 +1,3 @@
-noremap <silent> <plug>(op#_noremap_;) ;
-noremap <silent> <plug>(op#_noremap_,) ,
 "
 " external pair# interface
 "
