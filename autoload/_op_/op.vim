@@ -612,7 +612,7 @@ function _op_#op#ExprWithModifiers(expr, mods, opts, ...) abort
             let l:expr_with_modifiers = repeat(l:expr_with_modifiers, l:count1)
         endif
     endif
-    call s:Log('ExprWithModifiers', '', 'expr_with_modifiers=' .. l:expr_with_modifiers)
+    call s:Log('ExprWithModifiers', s:PModes(0), 'expr_with_modifiers=' .. l:expr_with_modifiers)
 
     return l:expr_with_modifiers
 endfunction
