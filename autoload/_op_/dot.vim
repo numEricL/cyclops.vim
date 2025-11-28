@@ -1,4 +1,3 @@
-"
 " internal dot# interface
 "
 
@@ -20,6 +19,7 @@ endfunction
 
 function _op_#dot#ComputeMapCallback() abort
     call _op_#op#ComputeMapCallback()
+    silent! call repeat#invalidate() " disable vim-repeat if present
     if empty(_op_#stack#GetException())
         let l:handle = _op_#op#GetStoredHandle('dot')
         let l:handle['dot']['exit_mode'] = mode(1)
@@ -102,6 +102,7 @@ function _op_#dot#RepeatCallback(dummy) abort
         endfor
     endif
     let &operatorfunc = '_op_#dot#RepeatCallback'
+    silent! call repeat#invalidate() " disable vim-repeat if present
 endfunction
 
 function s:RestoreRepeatEntry(handle) abort
