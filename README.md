@@ -167,6 +167,41 @@ nmap <expr> <plug>(change) op#Noremap('ciw')
 nmap <expr> R dot#Map('<plug>(search)<plug>(change)')
 ```
 
+## Testing
+
+cyclops.vim includes a comprehensive test suite to ensure reliability and
+correctness.
+
+### Running Tests
+
+There are multiple ways to run the tests:
+
+**Using the shell script (recommended):**
+```bash
+./test/run.sh
+```
+
+**Using Vim directly:**
+```bash
+vim -Nu test/run_tests.vim
+```
+
+**Using Make (if available):**
+```bash
+make test
+```
+
+### Test Coverage
+
+The test suite includes:
+- Unit tests for `dot#`, `pair#`, and `op#` functions
+- Utility function tests
+- Settings and initialization tests
+- Integration tests combining multiple features
+- Visual mode support tests
+
+For more information about writing and running tests, see [test/README.md](test/README.md).
+
 ## Deprecation Notice
 
 dot#SetMaps and pair#SetMaps are deprecated. Use dot#SetMap and pair#SetMap for
