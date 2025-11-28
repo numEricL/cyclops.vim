@@ -292,10 +292,10 @@ function s:ProbeExpr(expr, type) abort
         throw 'op#abort'
     catch
         call extend(s:probe_exception, {
-                \ 'status': v:true,
-                \ 'expr': a:expr,
-                \ 'exception': v:exception,
-                \ } )
+                    \ 'status': v:true,
+                    \ 'expr': a:expr,
+                    \ 'exception': v:exception,
+                    \ } )
         call s:Log('** Probe Exception **', a:expr)
         call s:Log('** Probe Exception **', v:exception)
         call s:Log('** Probe Exception **', v:throwpoint)

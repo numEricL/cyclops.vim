@@ -18,32 +18,27 @@ function _op_#dot#InitCallback(handle) abort
                 \ } } )
 endfunction
 
-function _op_#dot#ComputeMapCallback(dummy) abort
-    let l:handle = _op_#stack#Top()
-    call s:RestoreEntry(l:handle, 'dot')
+function _op_#dot#ComputeMapCallback() abort
     call _op_#op#ComputeMapCallback()
     if empty(_op_#stack#GetException())
-        let &operatorfunc = '_op_#dot#RepeatCallback'
-    else
-        " last change is clobbered, even on fail
-        let &operatorfunc = '_op_#dot#ExceptionCallback'
+        let l:handle = _op_#op#GetStoredHandle('dot')
+        let l:handle['dot']['exit_mode'] = mode(1)
+        let l:motion = (mode(0) ==# 'n')? 'l' : ''
+        let &operatorfunc = '_op_#dot#InitRepeatOpFunc'
+        " for reasons unknown to me, feeding with mode 'x' does not work here
+        call feedkeys('g@' .. l:motion, 'n')
     endif
 endfunction
 
-function s:RestoreEntry(handle, key) abort
-    if a:handle[a:key]['mode'] ==# 'n'
-        call setpos('.', a:handle[a:key]['curpos'])
-    elseif a:handle[a:key]['mode'] =~# '\v^[vV]$'
+function _op_#dot#InitRepeatOpFunc(dummy) abort
+    let l:handle = _op_#op#GetStoredHandle('dot')
+
+    let &operatorfunc = '_op_#dot#RepeatCallback'
+    if l:handle['dot']['exit_mode'] =~# '\v^[vV]$'
         let l:selectmode = &selectmode | set selectmode=
         normal! gv
         let &selectmode = l:selectmode
     endif
-endfunction
-
-function _op_#dot#ExceptionCallback(dummy) abort
-    let l:handle = _op_#op#GetStoredHandle('dot')
-    call s:RestoreEntry(l:handle, 'repeat')
-    echohl ErrorMsg | echomsg 'last dot operation failed' | echohl None
 endfunction
 
 function _op_#dot#VisRepeatMap() abort
@@ -56,15 +51,6 @@ function _op_#dot#VisRepeatMap() abort
     let l:handle['repeat']['vdot_init'] = v:true
     return "\<esc>."
 endfunction
-
-" function _op_#dot#RepeatOpPending() abort
-"     let l:handle = _op_#op#GetStoredHandle('dot')
-"     if  !empty(l:handle) && !has_key(l:handle, 'abort') && has_key(l:handle, 'inputs')
-"         return join(l:handle['inputs'], '')
-"     else
-"         return "\<esc>"
-"     endif
-" endfunction
 
 function s:InitRepeatCallback(handle) abort
     if (g:cyclops_persistent_count && v:count == 0)
