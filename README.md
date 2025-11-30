@@ -156,7 +156,7 @@ Extend dot `d`
 
 ``` vim
 nmap <expr> d dot#Noremap('d')
-vmap <expr> d dot#Noremap('d')
+xmap <expr> d dot#Noremap('d')
 ```
 
 Create a (dot repeatable) operator from composition: Search for a pattern, then change the whole word:
