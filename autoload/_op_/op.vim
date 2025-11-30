@@ -2,8 +2,6 @@
 " internal op# interface
 "
 
-" TODO: provide command line prompt when in insert mode, --INSERT (operator)--
-" TODO: fix insert highlight in first col
 " TODO: operators should store input from different modes separately, then .
 "   used in operator pending mode can insert a motion from the last operator. E.g.
 "   if 'c' is a dot operator then 'ciwfoo' should store ['iw', 'foo'] and then
@@ -236,6 +234,18 @@ function s:HijackUserInput(handle, input_stream) abort
             let l:input_stream ..= getreg('i')
             call setreg('i', l:reg)
             call s:ProbeExpr('', 'hijack input()')
+        elseif s:hijack['hmode'] =~# '\v^(i|i-l)$'
+            while s:hijack['hmode'] =~# '\v^(i|i-l)$'
+                " unexpectedly, col('.') inside hijack-probe does not reflect actual cursor pos after inserting a char at beginning of line with feedkeys
+                let l:insert = (getpos("']'")[2] == 1)? 'i' : 'a'
+                let l:char = s:GetCharFromUser(a:handle, '')
+                call s:Log('HijackUserInput', s:PModes(2), 'FEED_x!: ' .. l:insert .. l:char .. s:hijack_probe .. s:hijack_esc)
+                call feedkeys(l:insert, 'n')
+                call feedkeys(l:char .. s:hijack_probe .. s:hijack_esc, 'x!')
+                let l:input_stream ..= l:char
+            endwhile
+            call _op_#utils#RestoreState(a:handle['state'])
+            call s:ProbeExpr(l:op .. l:expr .. l:input_stream, 'hijack')
         else
             let l:char = s:GetCharFromUser(a:handle, l:input_stream)
             let l:input_stream = s:ProcessStream(l:input_stream, l:char)
@@ -385,12 +395,12 @@ function s:ParentCallUpdate(handle) abort
     let l:parent_handle['expr']['reduced_so_far'] ..= l:expr
 endfunction
 
-function s:GetCharFromUser(handle, input_stream) abort
+function s:GetCharFromUser(handle, display_stream) abort
     let l:mode = s:HModeToMapMode(s:hijack['hmode'])
     let l:match_ids = []
     " extra typeahead may be available if user typed fast
     if !getchar(1)
-        let l:match_ids = s:SetInteractiveElements(a:handle, l:mode, a:input_stream)
+        let l:match_ids = s:SetDisplayElements(a:handle, l:mode, a:display_stream)
     endif
 
     try
@@ -407,29 +417,17 @@ function s:GetCharFromUser(handle, input_stream) abort
     return l:char
 endfunction
 
-function s:HModeToMapMode(hmode) abort
-    if a:hmode =~# '\v^(i|i-l)$'
-        return 'i'
-    elseif a:hmode =~# '\v^(no[vV]?|consumed|[nv]-l)(-l)?$'
-        return 'o'
-    elseif a:hmode =~# '\v^(c|c-l)$'
-        return 'c'
-    else
-        call _op_#op#Throw('Unsupported hijack mode: "' .. string(a:hmode) .. '". Please make a feature request.')
-    endif
-endfunction
-
-function s:SetInteractiveElements(handle, mode, input_stream) abort
+function s:SetDisplayElements(handle, mode, display_stream) abort
     let l:match_ids = []
     if a:mode ==# 'i'
-        call _op_#utils#RestoreState(a:handle['state'])
-        call s:Log('GetCharFromUser_i', s:PModes(0), 'FEED_tx=' .. a:handle['expr']['reduced'] .. a:input_stream)
-        silent call feedkeys(a:handle['expr']['reduced'] .. a:input_stream, 'x')
         let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
-        call add(l:match_ids, matchadd(l:cursor_hl, '\%' .. line('.') .. 'l\%' .. (col('.')+1) .. 'c'))
+        " workaround for col('.') not updating correctly when inserting at beginning of line
+        let l:cur_offset = (getpos("']'")[2] == 1)? 0 : 1
+        call add(l:match_ids, matchadd(l:cursor_hl, '\%' .. line('.') .. 'l\%' .. (col('.') + l:cur_offset) .. 'c'))
+        redraw
+        unsilent echo '--INSERT-- (cyclops.vim)'
     elseif a:mode ==# 'o'
         call _op_#utils#RestoreState(a:handle['state'])
-        unsilent echo 'Operator Input:' .. a:input_stream
         let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
         if a:handle['init']['mode'] =~# '\v^[vV]$'
             if a:handle['init']['mode'] =~# '\v^[vV]$'
@@ -440,18 +438,32 @@ function s:SetInteractiveElements(handle, mode, input_stream) abort
             endif
         endif
         call add(l:match_ids, matchadd(l:cursor_hl, '\%' .. line('.') .. 'l\%' .. col('.') .. 'c'))
+        redraw
+        unsilent echo 'Operator Input:' .. a:display_stream
     elseif a:mode ==# 'c'
         unsilent echo s:hijack['cmd_type'] .. s:hijack['cmd']
         if s:hijack['cmd_type'] =~# '\v[/?]' && &incsearch
             let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
-            let l:input = (s:hijack['cmd_type'] == a:input_stream[0])? a:input_stream[1:] : a:input_stream
+            let l:input = (s:hijack['cmd_type'] == a:display_stream[0])? a:display_stream[1:] : a:display_stream
             nohlsearch
             silent! call add(l:match_ids, matchadd('IncSearch', l:input))
         endif
+        redraw
     endif
 
-    redraw
     return l:match_ids
+endfunction
+
+function s:HModeToMapMode(hmode) abort
+    if a:hmode =~# '\v^(i|i-l)$'
+        return 'i'
+    elseif a:hmode =~# '\v^(no[vV]?|consumed|[nv]-l)(-l)?$'
+        return 'o'
+    elseif a:hmode =~# '\v^(c|c-l)$'
+        return 'c'
+    else
+        call _op_#op#Throw('Unsupported hijack mode: "' .. string(a:hmode) .. '". Please make a feature request.')
+    endif
 endfunction
 
 function s:ClearHighlights(match_ids) abort
