@@ -13,9 +13,6 @@ let s:RegisterNoremap   = function('_op_#init#RegisterNoremap')
 
 function op#Map(map, ...) abort
     call s:AssertExprMap()
-    if !empty(reg_recording()) || !empty(reg_executing())
-        return a:map
-    endif
     let l:handle = _op_#op#StackInit()
     call _op_#op#InitCallback(l:handle, 'op', a:map, s:ExtendDefaultOpts(a:000))
     let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
@@ -24,9 +21,6 @@ endfunction
 
 function op#Noremap(map, ...) abort
     call s:AssertExprMap()
-    if !empty(reg_recording()) || !empty(reg_executing())
-        return a:map
-    endif
     let l:map = s:RegisterNoremap(a:map)
     let l:handle = _op_#op#StackInit()
     call _op_#op#InitCallback(l:handle, 'op', l:map, s:ExtendDefaultOpts(a:000))

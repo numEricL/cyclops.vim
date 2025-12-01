@@ -15,9 +15,6 @@ let s:StackInit         = function('_op_#op#StackInit')
 function pair#MapNext(pair, ...) abort
     call s:AssertExprMap()
     call s:AssertPair(a:pair)
-    if !empty(reg_recording()) || !empty(reg_executing())
-        return a:pair[0]
-    endif
     let l:handle = s:StackInit()
     call _op_#op#InitCallback(l:handle, 'pair', a:pair[0], s:ExtendDefaultOpts(a:000))
     call _op_#pair#Initcallback(l:handle, a:pair, 'next')
@@ -28,9 +25,6 @@ endfunction
 function pair#MapPrev(pair, ...) abort
     call s:AssertExprMap()
     call s:AssertPair(a:pair)
-    if !empty(reg_recording()) || !empty(reg_executing())
-        return a:pair[1]
-    endif
     let l:handle = s:StackInit()
     call _op_#op#InitCallback(l:handle, 'pair', a:pair[1], s:ExtendDefaultOpts(a:000))
     call _op_#pair#Initcallback(l:handle, a:pair, 'prev')
@@ -41,9 +35,6 @@ endfunction
 function pair#NoremapNext(pair, ...) abort
     call s:AssertExprMap()
     call s:AssertPair(a:pair)
-    if !empty(reg_recording()) || !empty(reg_executing())
-        return a:pair[0]
-    endif
     let l:pair = s:RegisterNoremapPair(a:pair)
     let l:handle = s:StackInit()
     call _op_#op#InitCallback(l:handle, 'pair', l:pair[0], s:ExtendDefaultOpts(a:000))
@@ -55,9 +46,6 @@ endfunction
 function pair#NoremapPrev(pair, ...) abort
     call s:AssertExprMap()
     call s:AssertPair(a:pair)
-    if !empty(reg_recording()) || !empty(reg_executing())
-        return a:pair[1]
-    endif
     let l:pair = s:RegisterNoremapPair(a:pair)
     let l:handle = s:StackInit()
     call _op_#op#InitCallback(l:handle, 'pair', l:pair[1], s:ExtendDefaultOpts(a:000))

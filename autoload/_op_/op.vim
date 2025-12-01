@@ -72,6 +72,7 @@ function _op_#op#InitCallback(handle, handle_type, expr, opts) abort
                 \ 'mode'         : mode(1),
                 \ 'op_type'      : mode(1)[:1] ==# 'no'? 'operand' : 'operator',
                 \ 'input_source' : (a:opts['consumes_typeahead']? 'typeahead': 'user'),
+                \ 'macro'        : reg_recording(),
                 \ } } )
     call extend(a:handle, { 'mods' : {
                 \ 'count'    : v:count,
@@ -94,10 +95,12 @@ function _op_#op#ComputeMapCallback() abort range
 
     if _op_#stack#Depth() == 1
         try
+            call s:MacroStop(l:handle)
             call s:ComputeMapOnStack(l:handle)
         catch /op#abort/
             echohl ErrorMsg | echomsg _op_#stack#GetException() | echohl None
             call _op_#utils#RestoreState(l:handle['state'])
+            call s:MacroAbort(l:handle)
             return
         endtry
     else
@@ -119,7 +122,39 @@ function _op_#op#ComputeMapCallback() abort range
         else
             call feedkeys(s:initial_typeahead, 'x')
         endif
+        call s:MacroResume(l:handle)
         call _op_#stack#Pop(0, 'StackInit')
+    endif
+endfunction
+
+function s:MacroStop(handle) abort
+    if !empty(a:handle['init']['macro'])
+        silent execute 'normal! q'
+        let s:macro_content = getreg(a:handle['init']['macro'])
+        " remove map that triggered this operator, will be replaced with reduced
+        " expr by MacroResume
+        let l:count = 0
+        let l:map_mode = s:ModeToMapMode(a:handle['init']['mode'])
+        while empty(maparg(strcharpart(s:macro_content, l:count), l:map_mode))
+            let l:count += 1
+        endwhile
+        call s:Log('MacroStop', '', 'calling expr=' .. strcharpart(s:macro_content, l:count))
+        let s:macro_content = strcharpart(s:macro_content, 0, l:count)
+    endif
+endfunction
+
+function s:MacroResume(handle) abort
+    if !empty(a:handle['init']['macro'])
+        let l:expr = _op_#op#ExprWithModifiers(a:handle['expr']['reduced'], a:handle['mods'], a:handle['opts'])
+        call setreg(a:handle['init']['macro'], s:macro_content .. l:expr)
+        silent execute 'normal! q' .. toupper(a:handle['init']['macro'])
+    endif
+endfunction
+
+function s:MacroAbort(handle) abort
+    if !empty(a:handle['init']['macro'])
+        call setreg(a:handle['init']['macro'], s:macro_content)
+        silent execute 'normal! q' .. toupper(a:handle['init']['macro'])
     endif
 endfunction
 

@@ -13,9 +13,6 @@ let s:RegisterNoremap   = function('_op_#init#RegisterNoremap')
 
 function dot#Map(map, ...) abort
     call s:AssertExprMap()
-    if !empty(reg_recording()) || !empty(reg_executing())
-        return a:map
-    endif
     let l:handle = _op_#op#StackInit()
     call _op_#op#InitCallback(l:handle, 'dot', a:map, s:ExtendDefaultOpts(a:000))
     call _op_#dot#InitCallback(l:handle)
@@ -25,9 +22,6 @@ endfunction
 
 function dot#Noremap(map, ...) abort
     call s:AssertExprMap()
-    if !empty(reg_recording()) || !empty(reg_executing())
-        return a:map
-    endif
     let l:map = s:RegisterNoremap(a:map)
     let l:handle = _op_#op#StackInit()
     call _op_#op#InitCallback(l:handle, 'dot', l:map, s:ExtendDefaultOpts(a:000))
