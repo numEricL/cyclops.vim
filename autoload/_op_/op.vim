@@ -67,11 +67,12 @@ function _op_#op#InitCallback(handle, handle_type, expr, opts) abort
     endif
 
     call extend(a:handle, { 'init' : {
-                \ 'handle_type'  : a:handle_type,
-                \ 'mode'         : mode(1),
-                \ 'op_type'      : mode(1)[:1] ==# 'no'? 'operand' : 'operator',
-                \ 'input_source' : (a:opts['consumes_typeahead']? 'typeahead': 'user'),
-                \ 'macro'        : reg_recording(),
+                \ 'handle_type'   : a:handle_type,
+                \ 'mode'          : mode(1),
+                \ 'op_type'       : mode(1)[:1] ==# 'no'? 'operand' : 'operator',
+                \ 'input_source'  : 'user',
+                \ 'reg_recording' : reg_recording(),
+                \ 'reg_executing' : reg_executing(),
                 \ } } )
     call extend(a:handle, { 'mods' : {
                 \ 'count'    : v:count,
@@ -127,33 +128,22 @@ function _op_#op#ComputeMapCallback() abort range
 endfunction
 
 function s:MacroStop(handle) abort
-    if !empty(a:handle['init']['macro'])
+    if !empty(a:handle['init']['reg_recording'])
         silent execute 'normal! q'
-        let s:macro_content = getreg(a:handle['init']['macro'])
-        " remove map that triggered this operator, will be replaced with reduced
-        " expr by MacroResume
-        let l:count = 0
-        let l:map_mode = s:ModeToMapMode(a:handle['init']['mode'])
-        while empty(maparg(strcharpart(s:macro_content, l:count), l:map_mode))
-            let l:count += 1
-        endwhile
-        call s:Log('MacroStop', '', 'calling expr=' .. strcharpart(s:macro_content, l:count))
-        let s:macro_content = strcharpart(s:macro_content, 0, l:count)
+        let s:macro_content = getreg(a:handle['init']['reg_recording'])
     endif
 endfunction
 
 function s:MacroResume(handle) abort
-    if !empty(a:handle['init']['macro'])
-        let l:expr = _op_#op#ExprWithModifiers(a:handle['expr']['reduced'], a:handle['mods'], a:handle['opts'])
-        call setreg(a:handle['init']['macro'], s:macro_content .. l:expr)
-        silent execute 'normal! q' .. toupper(a:handle['init']['macro'])
+    if !empty(a:handle['init']['reg_recording'])
+        silent execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
     endif
 endfunction
 
 function s:MacroAbort(handle) abort
-    if !empty(a:handle['init']['macro'])
-        call setreg(a:handle['init']['macro'], s:macro_content)
-        silent execute 'normal! q' .. toupper(a:handle['init']['macro'])
+    if !empty(a:handle['init']['reg_recording'])
+        call setreg(a:handle['init']['reg_recording'], s:macro_content)
+        silent execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
     endif
 endfunction
 

@@ -120,12 +120,8 @@ mode but shifts the visual selection relative to the new cursor position.
 ## Limitations
 
 `iminsert` is enabled while processing mappings, this may have unintended side
-effects if language mappings (`:lmap`) are used. A workaround could be
-implemented.
-
-This plugin is effectively disabled during macro recording due to unpredictable
-behavior when mixing macros and feedkeys. All mappings work as normal, but
-repeat functionality is disabled.
+effects if language mappings (`:lmap`) are used. Please file a bug report if
+issues occur.
 
 ## Sample usage:
 
