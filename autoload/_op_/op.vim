@@ -360,17 +360,9 @@ function s:ParentCallInit(handle) abort
 
     " in case [current map call] == xxxOP1, remove xxx
     let l:parent_call = l:calling_expr
-    if a:handle['init']['mode'] ==# 'n'
-        let l:mode = 'n'
-    elseif a:handle['init']['mode'] =~# '\v^[vV]$'
-        let l:mode = 'x'
-    elseif a:handle['init']['mode'] =~# '\v^[sS]$'
-        let l:mode = 's'
-    elseif a:handle['init']['mode'] =~# '\v^no.?$'
-        let l:mode = 'o'
-    endif
+    let l:map_mode = s:ModeToMapMode(a:handle['init']['mode'])
     let l:count = 0
-    while l:parent_call != '' && empty(maparg(substitute(l:parent_call, '\V' .. "\<plug>", '\<plug>', 'g'), l:mode))
+    while l:parent_call != '' && empty(maparg(substitute(l:parent_call, '\V' .. "\<plug>", '\<plug>', 'g'), l:map_mode))
         let l:count += 1
         let l:parent_call = strcharpart(l:calling_expr, l:count)
     endwhile
@@ -452,6 +444,18 @@ function s:SetDisplayElements(handle, mode, display_stream) abort
     endif
 
     return l:match_ids
+endfunction
+
+function s:ModeToMapMode(mode) abort
+    if a:mode ==# 'n'
+        return 'n'
+    elseif a:mode =~# '\v^[vV]$'
+        return 'x'
+    elseif a:mode =~# '\v^[sS]$'
+        return 's'
+    elseif a:mode =~# '\v^no.?$'
+        return 'o'
+    endif
 endfunction
 
 function s:HModeToMapMode(hmode) abort
@@ -613,7 +617,10 @@ endfunction
 function _op_#op#ExprWithModifiers(expr, mods, opts, ...) abort
     let l:op = a:0? a:1 : ''
 
-    let l:register = (a:opts['accepts_register'])? '"' .. a:mods['register'] : ''
+    let l:register = ''
+    if a:opts['accepts_register'] && a:mods['register'] !=# _op_#utils#DefaultRegister()
+        let l:register = '"' .. a:mods['register']
+    endif
     let l:expr_with_modifiers = l:register .. l:op .. a:expr
 
     if a:mods['count'] != 0
