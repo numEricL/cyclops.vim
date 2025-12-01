@@ -30,7 +30,7 @@ let s:operator_hmode_pattern = '\v^(no[vV]?|consumed|i|c|[nv]-l)(-l)?$'
 let s:fFtT_op_pending_pattern = '\v^(no[vV]?-l)$'
 
 let s:hijack = {'hmode': '', 'cmd': '', 'cmd_type': ''}
-let s:ambiguous_map_chars = ''
+let s:initial_typeahead = ''
 let s:inputs = []
 let s:operand = { 'expr': '', 'input': '' }
 let s:probe_exception = { 'status': v:false, 'expr': '', 'exception': '' }
@@ -49,7 +49,7 @@ function _op_#op#GetStoredHandle(handle_type) abort
 endfunction
 
 function s:InitScriptVars()
-    let s:ambiguous_map_chars = ''
+    let s:initial_typeahead = ''
     call extend(s:operand, { 'expr': '', 'input': '' } )
     call extend(s:hijack, { 'hmode': '', 'cmd': '', 'cmd_type': '' } ) " init early for s:Log
     call extend(s:probe_exception, { 'status': v:false, 'expr': '', 'exception': '' } )
@@ -107,15 +107,17 @@ function _op_#op#ComputeMapCallback() abort range
     call s:StoreHandle(l:handle)
 
     if _op_#stack#Depth() == 1
+        call s:Log('ComputeMapCallback EXIT', '', 'initial_typeahead=' .. s:initial_typeahead)
         if s:ModifiersNeeded(l:handle)
             call _op_#utils#RestoreState(l:handle['state'])
             let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:handle['mods'], l:handle['opts'], l:handle['expr']['op'])
-            call s:Log('EXIT', s:PModes(0), 'FEED_tx!=' .. l:expr_with_modifiers .. s:ambiguous_map_chars)
-            if l:handle['opts']['silent']
-                silent call feedkeys(l:expr_with_modifiers .. s:ambiguous_map_chars, 'x!')
-            else
-                call feedkeys(l:expr_with_modifiers .. s:ambiguous_map_chars, 'x!')
-            endif
+            call s:Log('EXIT', s:PModes(0), 'FEED_tx!=' .. l:expr_with_modifiers .. s:initial_typeahead)
+            call feedkeys(l:expr_with_modifiers, '')
+        endif
+        if l:handle['opts']['silent']
+            silent call feedkeys(s:initial_typeahead, 'x')
+        else
+            call feedkeys(s:initial_typeahead, 'x')
         endif
         call _op_#stack#Pop(0, 'StackInit')
     endif
@@ -123,12 +125,12 @@ endfunction
 
 function s:ComputeMapOnStack(handle) abort
     if _op_#stack#Depth() == 1
-        let s:ambiguous_map_chars = s:StealTypeaheadTruncated()
-        if s:ambiguous_map_chars =~# '\v' .. "\<esc>" .. '{' .. g:cyclops_max_trunc_esc .. '}$'
-            call _op_#op#Throw('Typeahead overflow while setting ambiguous_map_chars')
+        let s:initial_typeahead = s:StealTypeaheadTruncated()
+        if s:initial_typeahead =~# '\v' .. "\<esc>" .. '{' .. g:cyclops_max_trunc_esc .. '}$'
+            call _op_#op#Throw('Typeahead overflow while setting initial_typeahead')
         endif
-        if !empty(s:ambiguous_map_chars)
-            call s:Log('ComputeMapOnStack', '', 'ambiguous map chars=' .. s:ambiguous_map_chars)
+        if !empty(s:initial_typeahead)
+            call s:Log('ComputeMapOnStack', '', 'initial_typeahead=' .. s:initial_typeahead)
         endif
 
         " Nested op#map calls results in recursion and is managed by a stack.
@@ -166,7 +168,7 @@ function s:HijackInput(handle) abort
         return ''
     endif
 
-    " Get input from ambig maps, user, or typeahead
+    " Get input from initial_typeahead, user, or typeahead
     let l:input_stream = ''
     let l:op = a:handle['expr']['op']
     let l:expr = a:handle['expr']['reduced']
@@ -180,13 +182,11 @@ function s:HijackInput(handle) abort
     endif
 
     " call s:Log(s:Pad('HijackInput GET INPUT: ', 30) .. 'expr=' .. l:op .. l:expr .. ' typeahead=' .. s:TypeaheadLog())
-
-    while !empty(s:ambiguous_map_chars) && s:hijack['hmode'] =~# s:operator_hmode_pattern
-        let l:ambig_char = strcharpart(s:ambiguous_map_chars, 0, 1)
-        let s:ambiguous_map_chars = strcharpart(s:ambiguous_map_chars, 1)
-        let l:input_stream ..= l:ambig_char
+    while !empty(s:initial_typeahead) && s:hijack['hmode'] =~# s:operator_hmode_pattern
+        let l:input_stream ..= strcharpart(s:initial_typeahead, 0, 1)
+        let s:initial_typeahead = strcharpart(s:initial_typeahead, 1)
         call _op_#utils#RestoreState(a:handle['state'])
-        call s:ProbeExpr(l:op .. l:expr .. l:input_stream, 'ambig chars')
+        call s:ProbeExpr(l:op .. l:expr .. l:input_stream, 'initial_typeahead')
     endwhile
 
     if s:hijack['hmode'] =~# s:operator_hmode_pattern
