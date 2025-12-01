@@ -9,7 +9,6 @@
 " TODO: enable chained operand support (refactor s:inputs, operand expr reduction)
 " TODO: operator pending mode for dot/pair repeat
 " TODO: pair repeat with different modes?
-" TODO: use neovim virtual text instead of actual insertion during HijackInput
 
 let s:cpo = &cpo
 set cpo&vim
@@ -118,9 +117,9 @@ function _op_#op#ComputeMapCallback() abort range
             call feedkeys(l:expr_with_modifiers, '')
         endif
         if l:handle['opts']['silent']
-            silent call feedkeys(s:initial_typeahead, 'x')
+            silent call feedkeys(s:initial_typeahead, 'tx!')
         else
-            call feedkeys(s:initial_typeahead, 'x')
+            call feedkeys(s:initial_typeahead, 'tx!')
         endif
         call s:MacroResume(l:handle)
         call _op_#stack#Pop(0, 'StackInit')
@@ -203,7 +202,6 @@ function s:HijackInput(handle) abort
         return ''
     endif
 
-    " Get input from initial_typeahead, user, or typeahead
     let l:input_stream = ''
     let l:op = a:handle['expr']['op']
     let l:expr = a:handle['expr']['reduced']
@@ -216,25 +214,19 @@ function s:HijackInput(handle) abort
         return l:input_stream
     endif
 
-    " call s:Log(s:Pad('HijackInput GET INPUT: ', 30) .. 'expr=' .. l:op .. l:expr .. ' typeahead=' .. s:TypeaheadLog())
-    while !empty(s:initial_typeahead) && s:hijack['hmode'] =~# s:operator_hmode_pattern
-        let l:input_stream ..= strcharpart(s:initial_typeahead, 0, 1)
-        let s:initial_typeahead = strcharpart(s:initial_typeahead, 1)
-        call _op_#utils#RestoreState(a:handle['state'])
-        call s:ProbeExpr(l:op .. l:expr .. l:input_stream, 'initial_typeahead')
-    endwhile
+    let l:input_stream = s:HijackUserInput(a:handle, l:input_stream)
 
-    if s:hijack['hmode'] =~# s:operator_hmode_pattern
-        if a:handle['init']['input_source'] ==# 'user'
-            let l:input_stream = s:HijackUserInput(a:handle, l:input_stream)
-        else
-            while s:hijack['hmode'] =~# s:operator_hmode_pattern
-                let l:input_stream ..= s:GetCharFromTypeahead(a:handle)
-                call _op_#utils#RestoreState(a:handle['state'])
-                call s:ProbeExpr(l:op .. l:expr .. l:input_stream, 'typeahead')
-            endwhile
-        endif
-    endif
+    " if s:hijack['hmode'] =~# s:operator_hmode_pattern
+    "     if a:handle['init']['input_source'] ==# 'user'
+    "         let l:input_stream = s:HijackUserInput(a:handle, l:input_stream)
+    "     else
+    "         while s:hijack['hmode'] =~# s:operator_hmode_pattern
+    "             let l:input_stream ..= s:GetCharFromTypeahead(a:handle)
+    "             call _op_#utils#RestoreState(a:handle['state'])
+    "             call s:ProbeExpr(l:op .. l:expr .. l:input_stream, 'typeahead')
+    "         endwhile
+    "     endif
+    " endif
 
     " TODO: this needs to be generalized to allow chained operands
     if a:handle['init']['op_type'] ==# 'operand'
@@ -426,7 +418,7 @@ function s:GetCharFromUser(handle, display_stream) abort
     let l:mode = s:HModeToMapMode(s:hijack['hmode'])
     let l:match_ids = []
     " extra typeahead may be available if user typed fast
-    if !getchar(1)
+    if !getchar(1) && empty(s:initial_typeahead)
         let l:match_ids = s:SetDisplayElements(a:handle, l:mode, a:display_stream)
     endif
 
@@ -515,7 +507,12 @@ endfunction
 
 function s:GetCharStr(mode) abort
     try
-        let l:char = getcharstr()
+        if !empty(s:initial_typeahead)
+            let l:char = strcharpart(s:initial_typeahead, 0, 1)
+            let s:initial_typeahead = strcharpart(s:initial_typeahead, 1)
+        else
+            let l:char = getcharstr()
+        endif
     catch /^Vim:Interrupt$/
         if !empty(a:mode) && !empty(maparg('<c-c>', a:mode))
             let l:char = "\<c-c>"
@@ -688,6 +685,10 @@ endfunction
 " only used for logging
 function _op_#op#GetLastHijack() abort
     return s:hijack
+endfunction
+
+function _op_#op#GetProbe() abort
+    return s:hijack_probe .. s:hijack_esc
 endfunction
 
 let &cpo = s:cpo
