@@ -7,6 +7,7 @@ set cpo&vim
 
 silent! call _op_#init#settings#Load()
 
+let s:macro_content = ''
 let s:Log = function('_op_#log#Log')
 
 function _op_#dot#InitCallback(handle) abort
@@ -122,9 +123,9 @@ function s:MacroStop(handle) abort
 endfunction
 
 function s:MacroResume(handle) abort
-    if !empty(a:handle['init']['reg_recording'])
-        call setreg(tolower(a:handle['init']['reg_recording']), s:macro_content)
-        silent execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
+    if !empty(a:handle['repeat']['reg_recording'])
+        call setreg(tolower(a:handle['repeat']['reg_recording']), s:macro_content)
+        silent execute 'normal! q' .. toupper(a:handle['repeat']['reg_recording'])
     endif
 endfunction
 

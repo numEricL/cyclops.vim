@@ -33,6 +33,7 @@ let s:initial_typeahead = ''
 let s:inputs = []
 let s:operand = { 'expr': '', 'input': '' }
 let s:probe_exception = { 'status': v:false, 'expr': '', 'exception': '' }
+let s:macro_content = ''
 
 let s:handles = { 'op': {}, 'dot': {}, 'pair': {} }
 
@@ -49,6 +50,7 @@ endfunction
 
 function s:InitScriptVars()
     let s:initial_typeahead = ''
+    let s:macro_content = ''
     call extend(s:operand, { 'expr': '', 'input': '' } )
     call extend(s:hijack, { 'hmode': '', 'cmd': '', 'cmd_type': '' } ) " init early for s:Log
     call extend(s:probe_exception, { 'status': v:false, 'expr': '', 'exception': '' } )
@@ -478,6 +480,7 @@ function s:ModeToMapMode(mode) abort
     elseif a:mode =~# '\v^no.?$'
         return 'o'
     endif
+    call _op_#op#Throw('Unsupported mode: "' .. string(a:mode))
 endfunction
 
 function s:HModeToMapMode(hmode) abort
