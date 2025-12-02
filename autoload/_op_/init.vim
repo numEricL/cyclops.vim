@@ -82,7 +82,7 @@ function _op_#init#RegisterNoremap(map) abort
     if empty(maparg(l:plugmap))
         execute 'noremap <silent> ' .. l:plugmap .. ' ' .. a:map
     endif
-    return substitute(l:plugmap, '<plug>', "\<plug>", '')
+    return substitute(l:plugmap, '<plug>', "\<plug>", 'g')
 endfunction
 
 function _op_#init#RegisterMap(mapping_type, map) abort
@@ -111,7 +111,7 @@ function _op_#init#RegisterMap(mapping_type, map) abort
     catch /^Vim\%((\a\+)\)\=:E119:/
         call mapset(l:mode, 0, l:rhs_mapinfo)
     endtry
-    return substitute(l:plugmap, '<plug>', "\<plug>", '')
+    return substitute(l:plugmap, '<plug>', "\<plug>", 'g')
 endfunction
 
 function _op_#init#DeprecationNotice(msg) abort

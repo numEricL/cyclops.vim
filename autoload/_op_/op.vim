@@ -514,7 +514,7 @@ function s:GetCharStr(mode) abort
             if l:char == "\<plug>"
                 let l:end = getcharstr()
                 let l:char ..= l:end
-                while l:end != ')'
+                while !empty(l:end) && l:end != ')'
                     let l:end = getcharstr()
                     let l:char ..= l:end
                 endwhile
