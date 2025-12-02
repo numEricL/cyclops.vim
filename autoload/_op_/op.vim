@@ -72,7 +72,6 @@ function _op_#op#InitCallback(handle, handle_type, expr, opts) abort
                 \ 'op_type'       : mode(1)[:1] ==# 'no'? 'operand' : 'operator',
                 \ 'input_source'  : 'user',
                 \ 'reg_recording' : reg_recording(),
-                \ 'reg_executing' : reg_executing(),
                 \ } } )
     call extend(a:handle, { 'mods' : {
                 \ 'count'    : v:count,

@@ -66,7 +66,6 @@ function s:InitRepeatCallback(handle) abort
                 \ 'mode'     : mode(1),
                 \ 'curpos'   : getcurpos(),
                 \ 'reg_recording' : reg_recording(),
-                \ 'reg_executing' : reg_executing(),
                 \ } } )
     call extend(a:handle, { 'repeat_mods': {
                 \ 'count'    : l:count,
