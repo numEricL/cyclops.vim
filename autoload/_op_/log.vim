@@ -129,7 +129,8 @@ function s:ToPrintable(value) abort
     let l:value = a:value
     let l:value = substitute(l:value, "\<plug>", '<plug>', 'g')
     let l:value = substitute(l:value, "\<cmd>" , '<cmd>' , 'g')
-    let l:value = substitute(l:value, "\<bs>" , '<bs>' , 'g')
+    let l:value = substitute(l:value, "\<bs>"  , '<bs>'  , 'g')
+    let l:value = substitute(l:value, _op_#op#GetProbe(), '<PROBE>', 'g')
     let l:output = ''
     for l:char in split(l:value, '\zs')
         let l:nr = char2nr(l:char)

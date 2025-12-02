@@ -117,15 +117,17 @@ visual mode repeat uses the new visual selection when repeating the mapping. If
 the map was originally executed in normal mode, cyclops.vim re-enters visual
 mode but shifts the visual selection relative to the new cursor position.
 
+## Macro Support
+
+Special macro handling is performed to provide the expected behavior when
+recording macros. This feature is new and not extensively tested, please file a
+bug report if issues arise.
+
 ## Limitations
 
 `iminsert` is enabled while processing mappings, this may have unintended side
-effects if language mappings (`:lmap`) are used. A workaround could be
-implemented.
-
-This plugin is effectively disabled during macro recording due to unpredictable
-behavior when mixing macros and feedkeys. All mappings work as normal, but
-repeat functionality is disabled.
+effects if language mappings (`:lmap`) are used. Please file a bug report if
+issues occur.
 
 ## Sample usage:
 
@@ -156,7 +158,7 @@ Extend dot `d`
 
 ``` vim
 nmap <expr> d dot#Noremap('d')
-vmap <expr> d dot#Noremap('d')
+xmap <expr> d dot#Noremap('d')
 ```
 
 Create a (dot repeatable) operator from composition: Search for a pattern, then change the whole word:

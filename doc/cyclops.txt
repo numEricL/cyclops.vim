@@ -127,7 +127,7 @@ dot#SetMap({mapping_type}, {map} [, {opts}])                   *dot#SetMap()*
     plugin defines mappings without letting the user choose the mapping keys.
 
     Parameters:~
-        {mapping_type}  'map', 'nmap', 'vmap', etc.
+        {mapping_type}  'map', 'nmap', 'xmap', etc.
         {map}           String containing the mapping key sequence
         {opts}          Optional dictionary of options (see |cyclops-config|)
 
@@ -188,7 +188,7 @@ pair#SetMap({mapping_type}, {pair} [, {opts}])                *pair#SetMap()*
     plugin defines mappings without letting the user choose the mapping keys.
 
     Parameters:~
-        {mapping_type}  'map', 'nmap', 'vmap', etc.
+        {mapping_type}  'map', 'nmap', 'xmap', etc.
         {pair}          List with two elements [forward, backward]
         {opts}          Optional dictionary of options (see |cyclops-config|)
 
@@ -225,7 +225,7 @@ op#SetMap({mapping_type}, {map} [, {opts}])                     *op#SetMap()*
     Convert an existing mapping to a cyclops operator.
 
     Parameters:~
-        {mapping_type}  'map', 'nmap', 'vmap', etc.
+        {mapping_type}  'map', 'nmap', 'xmap', etc.
         {map}           String containing the mapping key sequence
         {opts}          Optional dictionary of options (see |cyclops-config|)
 
