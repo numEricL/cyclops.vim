@@ -506,8 +506,21 @@ endfunction
 function s:GetCharStr(mode) abort
     try
         if !empty(s:initial_typeahead)
-            let l:char = strcharpart(s:initial_typeahead, 0, 1)
-            let s:initial_typeahead = strcharpart(s:initial_typeahead, 1)
+            call inputsave()
+            call feedkeys(s:initial_typeahead, '')
+            let l:char = getcharstr()
+            " this case only happens with mappings managed by Cyclops and have the form <plug>(op#...)
+            " note: the sentinel RPAREN is used for `)`
+            if l:char == "\<plug>"
+                let l:end = getcharstr()
+                let l:char ..= l:end
+                while l:end != ')'
+                    let l:end = getcharstr()
+                    let l:char ..= l:end
+                endwhile
+            endif
+            let s:initial_typeahead = s:StealTypeahead()
+            call inputrestore()
         else
             let l:char = getcharstr()
         endif
