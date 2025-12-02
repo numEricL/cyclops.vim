@@ -480,7 +480,7 @@ function s:ModeToMapMode(mode) abort
     elseif a:mode =~# '\v^no.?$'
         return 'o'
     endif
-    call _op_#op#Throw('Unsupported mode: "' .. string(a:mode))
+    call _op_#op#Throw('Unsupported mode: ' .. string(a:mode))
 endfunction
 
 function s:HModeToMapMode(hmode) abort
@@ -491,7 +491,7 @@ function s:HModeToMapMode(hmode) abort
     elseif a:hmode =~# '\v^(c|c-l)$'
         return 'c'
     else
-        call _op_#op#Throw('Unsupported hijack mode: "' .. string(a:hmode) .. '". Please make a feature request.')
+        call _op_#op#Throw('Unsupported hijack mode: ' .. string(a:hmode) .. '. Please make a feature request.')
     endif
 endfunction
 
