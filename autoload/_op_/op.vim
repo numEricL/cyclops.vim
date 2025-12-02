@@ -95,6 +95,7 @@ function _op_#op#ComputeMapCallback() abort range
 
     if _op_#stack#Depth() == 1
         try
+            call s:SaveInitialTypeahead()
             call s:MacroStop(l:handle)
             call s:ComputeMapOnStack(l:handle)
         catch /op#abort/
@@ -115,12 +116,12 @@ function _op_#op#ComputeMapCallback() abort range
             call _op_#utils#RestoreState(l:handle['state'])
             let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:handle['mods'], l:handle['opts'], l:handle['expr']['op'])
             call s:Log('EXIT', s:PModes(0), 'FEED_tx!=' .. l:expr_with_modifiers .. s:initial_typeahead)
-            call feedkeys(l:expr_with_modifiers, '')
+            call feedkeys(l:expr_with_modifiers, 'tx!')
         endif
         if l:handle['opts']['silent']
-            silent call feedkeys(s:initial_typeahead, 'tx!')
+            silent call feedkeys(s:initial_typeahead, '')
         else
-            call feedkeys(s:initial_typeahead, 'tx!')
+            call feedkeys(s:initial_typeahead, '')
         endif
         call s:MacroResume(l:handle)
         call _op_#stack#Pop(0, 'StackInit')
@@ -131,38 +132,32 @@ function s:MacroStop(handle) abort
     if !empty(a:handle['init']['reg_recording'])
         silent execute 'normal! q'
         let s:macro_content = getreg(a:handle['init']['reg_recording'])
+        let s:macro_content = substitute(s:macro_content, '\V' .. escape(s:initial_typeahead, '\') .. '\$', '', '')
+        call s:Log('MacroStop', '', 'macro_content=' .. s:macro_content)
     endif
 endfunction
 
 function s:MacroResume(handle) abort
     if !empty(a:handle['init']['reg_recording'])
+        call setreg(tolower(a:handle['init']['reg_recording']), s:macro_content .. join(s:inputs, ''))
         silent execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
     endif
 endfunction
 
 function s:MacroAbort(handle) abort
     if !empty(a:handle['init']['reg_recording'])
-        call setreg(a:handle['init']['reg_recording'], s:macro_content)
+        call setreg(tolower(a:handle['init']['reg_recording']), s:macro_content)
         silent execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
     endif
 endfunction
 
 function s:ComputeMapOnStack(handle) abort
     if _op_#stack#Depth() == 1
-        let s:initial_typeahead = s:StealTypeaheadTruncated()
-        if s:initial_typeahead =~# '\v' .. "\<esc>" .. '{' .. g:cyclops_max_trunc_esc .. '}$'
-            call _op_#op#Throw('Typeahead overflow while setting initial_typeahead')
-        endif
-        if !empty(s:initial_typeahead)
-            call s:Log('ComputeMapOnStack', '', 'initial_typeahead=' .. s:initial_typeahead)
-        endif
-
         " Nested op#map calls results in recursion and is managed by a stack.
         " Recursion typically happens at this ProbeExpr call, but can also
         " happen in HijackInput if a registered omap is triggered. When
         " recursion happens, callee's update the caller's reduced expr, removing
         " the recursion in subsequent calls.
-
         call s:ProbeExpr(a:handle['expr']['op'] .. a:handle['expr']['orig'], 'expr_orig')
         let l:input = s:HijackInput(a:handle)
         call s:CheckForProbeErrors()
@@ -182,6 +177,16 @@ function s:ComputeMapOnStack(handle) abort
         call s:Log('ComputeMapOnStack', 'EXIT', 'FEED_tx!=' .. a:handle['expr']['op'] .. a:handle['expr']['reduced'])
         silent call feedkeys(a:handle['expr']['op'] .. a:handle['expr']['reduced'], 'x!')
         call inputrestore()
+    endif
+endfunction
+
+function s:SaveInitialTypeahead() abort
+    let s:initial_typeahead = s:StealTypeaheadTruncated()
+    if s:initial_typeahead =~# '\v' .. "\<esc>" .. '{' .. g:cyclops_max_trunc_esc .. '}$'
+        call _op_#op#Throw('Typeahead overflow while setting initial_typeahead')
+    endif
+    if !empty(s:initial_typeahead)
+        call s:Log('SaveInitialTypeahead', '', 'initial_typeahead=' .. s:initial_typeahead)
     endif
 endfunction
 
@@ -255,7 +260,7 @@ function s:HijackUserInput(handle, input_stream) abort
             while s:hijack['hmode'] =~# '\v^(i|i-l)$'
                 " unexpectedly, col('.') inside hijack-probe does not reflect actual cursor pos after inserting a char at beginning of line with feedkeys
                 let l:insert = (getpos("']'")[2] == 1)? 'i' : 'a'
-                let l:char = s:GetCharFromUser(a:handle, '')
+                let l:char = s:HijackUserChar(a:handle, '')
                 call s:Log('HijackUserInput', s:PModes(2), 'FEED_x!: ' .. l:insert .. l:char .. s:hijack_probe .. s:hijack_esc)
                 call feedkeys(l:insert, 'n')
                 call feedkeys(l:char .. s:hijack_probe .. s:hijack_esc, 'x!')
@@ -264,7 +269,7 @@ function s:HijackUserInput(handle, input_stream) abort
             call _op_#utils#RestoreState(a:handle['state'])
             call s:ProbeExpr(l:op .. l:expr .. l:input_stream, 'hijack')
         else
-            let l:char = s:GetCharFromUser(a:handle, l:input_stream)
+            let l:char = s:HijackUserChar(a:handle, l:input_stream)
             let l:input_stream = s:ProcessStream(l:input_stream, l:char)
             if s:hijack['hmode'] =~# s:fFtT_op_pending_pattern
                 call s:Log('HijackInput no-l break', '', "feedkeys('dfa×') workaround")
@@ -404,11 +409,12 @@ function s:ParentCallUpdate(handle) abort
     let l:parent_handle['expr']['reduced_so_far'] ..= l:expr
 endfunction
 
-function s:GetCharFromUser(handle, display_stream) abort
+function s:HijackUserChar(handle, display_stream) abort
+    let l:empty_init_typeahead = empty(s:initial_typeahead)
     let l:mode = s:HModeToMapMode(s:hijack['hmode'])
     let l:match_ids = []
     " extra typeahead may be available if user typed fast
-    if !getchar(1) && empty(s:initial_typeahead)
+    if !getchar(1) && l:empty_init_typeahead
         let l:match_ids = s:SetDisplayElements(a:handle, l:mode, a:display_stream)
     endif
 
@@ -422,7 +428,7 @@ function s:GetCharFromUser(handle, display_stream) abort
         call _op_#op#Throw('Empty char received from user')
     endif
 
-    call s:Log('GetCharFromUser', s:PModes(2), 'GOT char=' .. l:char)
+    call s:Log('HijackUserChar', s:PModes(2), (l:empty_init_typeahead? 'user' : 'init_typeahead') .. ' char=' .. l:char)
     return l:char
 endfunction
 
@@ -569,6 +575,10 @@ function s:TypeaheadLog() abort
     let l:typeahead = substitute(l:typeahead, '\v' .. s:hijack_probe .. s:hijack_esc, '<PROBE>', '')
     let l:typeahead = substitute(l:typeahead, '\v' .. "\<esc>" .. '{' .. g:cyclops_max_trunc_esc .. '}$', '<esc>...', '')
     return l:typeahead
+endfunction
+
+function _op_#op#TypeaheadLog() abort
+    return s:TypeaheadLog()
 endfunction
 
 function s:StealTypeahead() abort

@@ -75,11 +75,13 @@ function _op_#pair#RepeatCallback() abort
     let l:handle = _op_#op#GetStoredHandle('pair')
     let l:id = l:handle['repeat']['id']
     let l:expr = l:handle['pair']['reduced'][l:id]
+    call inputsave()
     if l:handle['opts']['silent']
         silent call feedkeys(_op_#op#ExprWithModifiers(l:expr, l:handle['repeat_mods'], l:handle['opts']), 'x!')
     else
         call feedkeys(_op_#op#ExprWithModifiers(l:expr, l:handle['repeat_mods'], l:handle['opts']), 'x!')
     endif
+    call inputrestore()
 endfunction
 
 let &cpo = s:cpo

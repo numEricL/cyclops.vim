@@ -117,6 +117,12 @@ visual mode repeat uses the new visual selection when repeating the mapping. If
 the map was originally executed in normal mode, cyclops.vim re-enters visual
 mode but shifts the visual selection relative to the new cursor position.
 
+## Macro Support
+
+Special macro handling is performed to provide the expected behavior when
+recording macros. This feature is new and not extensively tested, please file a
+bug report if issues arise.
+
 ## Limitations
 
 `iminsert` is enabled while processing mappings, this may have unintended side

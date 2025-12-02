@@ -7,6 +7,8 @@ set cpo&vim
 
 silent! call _op_#init#settings#Load()
 
+let s:Log = function('_op_#log#Log')
+
 function _op_#dot#InitCallback(handle) abort
     call extend(a:handle, { 'dot' : {
                 \ 'mode'     : mode(1),
@@ -27,7 +29,7 @@ function _op_#dot#ComputeMapCallback() abort
         let l:motion = (mode(0) ==# 'n')? 'l' : ''
         let &operatorfunc = '_op_#dot#InitRepeatOpFunc'
         " for reasons unknown to me, feeding with mode 'x' does not work here
-        call feedkeys('g@' .. l:motion, 'n')
+        call feedkeys('g@' .. l:motion, 'in')
     endif
 endfunction
 
@@ -63,6 +65,8 @@ function s:InitRepeatCallback(handle) abort
     call extend(a:handle, { 'repeat' : {
                 \ 'mode'     : mode(1),
                 \ 'curpos'   : getcurpos(),
+                \ 'reg_recording' : reg_recording(),
+                \ 'reg_executing' : reg_executing(),
                 \ } } )
     call extend(a:handle, { 'repeat_mods': {
                 \ 'count'    : l:count,
@@ -72,6 +76,7 @@ endfunction
 
 function _op_#dot#RepeatCallback(dummy) abort
     let l:handle = _op_#op#GetStoredHandle('dot')
+    call s:Log('dot#RepeatCallback', '', l:handle['expr']['reduced'] .. ' typeahead=' .. _op_#op#TypeaheadLog())
     " normal mode dot initializes here, visdot initializes in <expr> map
     if has_key(l:handle, 'repeat') && get(l:handle['repeat'], 'vdot_init')
         " reset for next dot call
@@ -80,13 +85,15 @@ function _op_#dot#RepeatCallback(dummy) abort
         call s:InitRepeatCallback(l:handle)
     endif
 
+    call s:MacroStop(l:handle)
+    call inputsave()
     if l:handle['opts']['accepts_count']
         let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:handle['repeat_mods'], l:handle['opts'])
         call s:RestoreRepeatEntry(l:handle)
         if l:handle['opts']['silent']
-            silent call feedkeys(l:expr_with_modifiers, 'x!')
+            silent call feedkeys(l:expr_with_modifiers, 'tx!')
         else
-            call feedkeys(l:expr_with_modifiers, 'x!')
+            call feedkeys(l:expr_with_modifiers, 'tx!')
         endif
     else
         let l:mods = extend({'count': 0}, l:handle['repeat_mods'], 'keep')
@@ -104,6 +111,22 @@ function _op_#dot#RepeatCallback(dummy) abort
     endif
     let &operatorfunc = '_op_#dot#RepeatCallback'
     silent! call repeat#invalidate() " disable vim-repeat if present
+    call inputrestore()
+    call s:MacroResume(l:handle)
+endfunction
+
+function s:MacroStop(handle) abort
+    if a:handle['repeat']['reg_recording'] !=# ''
+        silent execute 'normal! q'
+        let s:macro_content = getreg(a:handle['repeat']['reg_recording'])
+    endif
+endfunction
+
+function s:MacroResume(handle) abort
+    if !empty(a:handle['init']['reg_recording'])
+        call setreg(tolower(a:handle['init']['reg_recording']), s:macro_content)
+        silent execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
+    endif
 endfunction
 
 function s:RestoreRepeatEntry(handle) abort
