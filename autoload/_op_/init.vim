@@ -77,18 +77,20 @@ function _op_#init#ExtendDefaultOpts(vargs)
 endfunction
 
 function _op_#init#RegisterNoremap(map) abort
-    let l:map_string = '<plug>(op#_noremap_' .. a:map .. ')'
-    if empty(maparg(l:map_string))
-        execute 'noremap <silent> ' .. l:map_string .. ' ' .. a:map
+    let l:map_with_sentinel = substitute(a:map, ')', 'RPAREN', 'g')
+    let l:plugmap = '<plug>(op#_noremap_' .. l:map_with_sentinel .. ')'
+    if empty(maparg(l:plugmap))
+        execute 'noremap <silent> ' .. l:plugmap .. ' ' .. a:map
     endif
-    return "\<plug>(op#_noremap_" .. a:map .. ')'
+    return substitute(l:plugmap, '<plug>', "\<plug>", 'g')
 endfunction
 
 function _op_#init#RegisterMap(mapping_type, map) abort
     call _op_#init#AssertRemap(a:map, a:mapping_type)
     call _op_#init#AssertSameRHS(a:map, a:mapping_type)
 
-    let l:plugmap = '<plug>(op#_' .. a:mapping_type .. '_' .. a:map .. ')'
+    let l:map_with_sentinel = substitute(a:map, ')', 'RPAREN', 'g')
+    let l:plugmap = '<plug>(op#_' .. a:mapping_type .. '_' .. l:map_with_sentinel .. ')'
     if !empty(maparg(l:plugmap))
         throw 'cyclops.vim: Mapping for ' .. l:plugmap .. ' already exists.'
     endif
@@ -109,7 +111,7 @@ function _op_#init#RegisterMap(mapping_type, map) abort
     catch /^Vim\%((\a\+)\)\=:E119:/
         call mapset(l:mode, 0, l:rhs_mapinfo)
     endtry
-    return l:plugmap
+    return substitute(l:plugmap, '<plug>', "\<plug>", 'g')
 endfunction
 
 function _op_#init#DeprecationNotice(msg) abort
