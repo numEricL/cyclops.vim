@@ -96,22 +96,14 @@ function _op_#dot#RepeatCallback(dummy) abort
     if l:handle['opts']['accepts_count']
         let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:handle['repeat_mods'], l:handle['opts'])
         call s:RestoreRepeatEntry(l:handle)
-        if l:handle['opts']['silent']
-            silent call feedkeys(l:expr_with_modifiers, 'tx!')
-        else
-            call feedkeys(l:expr_with_modifiers, 'tx!')
-        endif
+        call _op_#utils#Feedkeys(l:expr_with_modifiers, 'tx!', l:handle['opts']['silent'])
     else
         let l:mods = extend({'count': 0}, l:handle['repeat_mods'], 'keep')
         let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:mods, l:handle['opts'])
         let l:count1 = max([1, l:handle['repeat_mods']['count']])
         for _ in range(l:count1)
             call s:RestoreRepeatEntry(l:handle)
-            if l:handle['opts']['silent']
-                silent call feedkeys(l:expr_with_modifiers, 'x!')
-            else
-                call feedkeys(l:expr_with_modifiers, 'x!')
-            endif
+            call _op_#utils#Feedkeys(l:expr_with_modifiers, 'tx!', l:handle['opts']['silent'])
             call s:InitRepeatCallback(l:handle)
         endfor
     endif

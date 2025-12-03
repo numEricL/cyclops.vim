@@ -79,14 +79,10 @@ endfunction
 function _op_#pair#RepeatCallback() abort
     let l:handle = _op_#op#GetStoredHandle('pair')
     call _op_#utils#RestoreVisual_COMPAT(l:handle)
-    let l:id = l:handle['repeat']['id']
-    let l:expr = l:handle['pair']['reduced'][l:id]
     call inputsave()
-    if l:handle['opts']['silent']
-        silent call feedkeys(_op_#op#ExprWithModifiers(l:expr, l:handle['repeat_mods'], l:handle['opts']), 'x!')
-    else
-        call feedkeys(_op_#op#ExprWithModifiers(l:expr, l:handle['repeat_mods'], l:handle['opts']), 'x!')
-    endif
+    let l:id = l:handle['repeat']['id']
+    let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['pair']['reduced'][l:id], l:handle['repeat_mods'], l:handle['opts'])
+    call _op_#utils#Feedkeys(l:expr_with_modifiers, 'tx!', l:handle['opts']['silent'])
     call inputrestore()
 endfunction
 
