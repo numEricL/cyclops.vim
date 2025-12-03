@@ -133,7 +133,6 @@ function s:MacroStop(handle) abort
     if !empty(a:handle['init']['reg_recording'])
         silent execute 'normal! q'
         let s:macro_content = getreg(a:handle['init']['reg_recording'])
-        let s:macro_content = substitute(s:macro_content, '\V' .. escape(s:initial_typeahead, '\') .. '\$', '', '')
         call s:Log('MacroStop', '', 'macro_content=' .. s:macro_content)
     endif
 endfunction

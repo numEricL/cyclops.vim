@@ -15,7 +15,7 @@ function _op_#init#AssertExprMap() abort
         let l:expr_map = 1
     endtry
     if !l:expr_map
-        throw 'cyclops.vim: Assertion failed: Error while processing map, <expr> map must be used for this plugin'
+        throw 'cyclops.vim: Assertion failed: <expr> must be used for this map'
     endif
 endfunction
 
