@@ -117,13 +117,9 @@ function _op_#op#ComputeMapCallback() abort range
             call _op_#utils#RestoreState(l:handle['state'])
             let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:handle['mods'], l:handle['opts'], l:handle['expr']['op'])
             call s:Log('EXIT', s:PModes(0), 'FEED_tx!=' .. l:expr_with_modifiers .. s:initial_typeahead)
-            call feedkeys(l:expr_with_modifiers, 'tx!')
+            call _op_#utils#Feedkeys(l:expr_with_modifiers, 'tx!', l:handle['opts']['silent'])
         endif
-        if l:handle['opts']['silent']
-            silent call feedkeys(s:initial_typeahead, '')
-        else
-            call feedkeys(s:initial_typeahead, '')
-        endif
+        call _op_#utils#Feedkeys(s:initial_typeahead, '', l:handle['opts']['silent'])
         call s:MacroResume(l:handle)
         call _op_#stack#Pop(0, 'StackInit')
     endif
@@ -175,7 +171,7 @@ function s:ComputeMapOnStack(handle) abort
 
         call _op_#utils#RestoreState(a:handle['state'])
         call s:Log('ComputeMapOnStack', 'EXIT', 'FEED_tx!=' .. a:handle['expr']['op'] .. a:handle['expr']['reduced'])
-        silent call feedkeys(a:handle['expr']['op'] .. a:handle['expr']['reduced'], 'x!')
+        call _op_#utils#Feedkeys(a:handle['expr']['op'] .. a:handle['expr']['reduced'], 'tx!', 'silent')
         call inputrestore()
     endif
 endfunction
@@ -247,9 +243,9 @@ function s:HijackUserInput(handle, input_stream) abort
             call s:Log('HijackUserInput', s:PModes(2), 'FEED_x!: ' .. l:op .. l:expr .. l:input_stream)
             let l:reg = getreginfo('i')
             call _op_#utils#RestoreState(a:handle['state'])
-            call feedkeys('qi', 'n')
-            call feedkeys(l:op .. l:expr .. l:input_stream, 'x!')
-            call feedkeys('q', 'nx')
+            call _op_#utils#Feedkeys('qi', 'n', 'silent')
+            call _op_#utils#Feedkeys(l:op .. l:expr .. l:input_stream, 'x!', 'silent')
+            call _op_#utils#Feedkeys('q', 'nx', 'silent')
             let l:input_stream ..= getreg('i')
             call setreg('i', l:reg)
             call s:ProbeExpr('', 'hijack input()')
@@ -259,8 +255,8 @@ function s:HijackUserInput(handle, input_stream) abort
                 let l:insert = (getpos("']'")[2] == 1)? 'i' : 'a'
                 let l:char = s:HijackUserChar(a:handle, '')
                 call s:Log('HijackUserInput', s:PModes(2), 'FEED_x!: ' .. l:insert .. l:char .. s:hijack_probe .. s:hijack_esc)
-                call feedkeys(l:insert, 'n')
-                call feedkeys(l:char .. s:hijack_probe .. s:hijack_esc, 'x!')
+                call _op_#utils#Feedkeys(l:insert, 'n', 'silent')
+                call _op_#utils#Feedkeys(l:char .. s:hijack_probe .. s:hijack_esc, 'x!', 'silent')
                 let l:input_stream ..= l:char
             endwhile
             call _op_#utils#RestoreState(a:handle['state'])
@@ -305,8 +301,6 @@ function s:ProbeExpr(expr, type) abort
     let s:hijack = { 'hmode': 'consumed', 'cmd': '', 'cmd_type': '' }
 
     " vim uses these timeouts for feedkeys, neovim apparently does not
-    let [ l:timeout, l:timeoutlen ] = [ &timeout, &timeoutlen ] | set timeout timeoutlen=0
-    let [ l:ttimeout, l:ttimeoutlen ] = [ &ttimeout, &ttimeoutlen ] | set ttimeout ttimeoutlen=0
     let l:iminsert = &iminsert | set iminsert=1
     let l:belloff = &belloff | set belloff+=error,esc
     try
@@ -316,7 +310,7 @@ function s:ProbeExpr(expr, type) abort
 
         " 't' flag fixes an issue when cursor is at end of buffer and '<c-d>' is
         " fed, which prevented the probe from executing.
-        silent call feedkeys(a:expr .. s:hijack_probe .. s:hijack_esc, 'itx!')
+        call _op_#utils#Feedkeys(a:expr .. s:hijack_probe .. s:hijack_esc, 'itx!', 'silent')
     catch /op#abort/
         throw 'op#abort'
     catch
@@ -331,8 +325,6 @@ function s:ProbeExpr(expr, type) abort
     finally
         let &belloff = l:belloff
         let &iminsert = l:iminsert
-        let [ &ttimeout, &ttimeoutlen ] = [ l:ttimeout, l:ttimeoutlen ]
-        let [ &timeout, &timeoutlen ] = [ l:timeout, l:timeoutlen ]
     endtry
     call _op_#stack#Pop(l:stack_id, 'typeahead=' .. s:ReadTypeaheadTruncated())
 endfunction

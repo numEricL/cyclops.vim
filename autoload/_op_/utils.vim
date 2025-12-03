@@ -119,5 +119,20 @@ function _op_#utils#RestoreVisual_COMPAT(handle) abort
     endif
 endfunction
 
+function _op_#utils#Feedkeys(expr, mode, ...) abort
+    let [ l:timeout, l:timeoutlen ]   = [ &timeout, &timeoutlen ]   | set timeout timeoutlen=0
+    let [ l:ttimeout, l:ttimeoutlen ] = [ &ttimeout, &ttimeoutlen ] | set ttimeout ttimeoutlen=0
+    try
+        if a:0 == 1 && ( a:1 ==# 'silent' || a:1 == v:true )
+            silent call feedkeys(a:expr, a:mode)
+        else
+            call feedkeys(a:expr, a:mode)
+        endif
+    finally
+        let [ &ttimeout, &ttimeoutlen ] = [ l:ttimeout, l:ttimeoutlen ]
+        let [ &timeout, &timeoutlen ]   = [ l:timeout, l:timeoutlen ]
+    endtry
+endfunction
+
 let &cpo = s:cpo
 unlet s:cpo
