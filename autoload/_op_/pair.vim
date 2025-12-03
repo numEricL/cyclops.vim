@@ -51,10 +51,10 @@ endfunction
 
 function _op_#pair#InitRepeatCallback(handle, dir) abort
     " store original direction, needed for determining ; , direction
+    let l:init_id = has_key(a:handle, 'repeat')? a:handle['repeat']['init_id'] : a:handle['pair']['id']
     if a:handle['opts']['absolute_direction']
         let l:id = (a:dir !=# 'next')
     else
-        let l:init_id = has_key(a:handle, 'repeat')? a:handle['repeat']['init_id'] : a:handle['pair']['id']
         let l:id = (a:dir ==# 'next')? l:init_id : !l:init_id
     endif
     if (a:handle['opts']['persistent_count'] && v:count == 0)

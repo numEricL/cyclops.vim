@@ -503,15 +503,17 @@ function s:GetCharStr(mode) abort
     try
         if !empty(s:initial_typeahead)
             if s:initial_typeahead =~# '\v^' .. "\<plug>"
-                let idx = stridx(s:initial_typeahead, ')')
-                if idx == -1
+                let l:idx = stridx(s:initial_typeahead, ')')
+                if l:idx == -1
+                    " only <plug>(op#...) is expected here
                     call _op_#op#Throw('Malformed <plug> mapping in initial_typeahead')
                 endif
-                let l:char = strpart(s:initial_typeahead, 0, idx+1)
-                let s:initial_typeahead = strpart(s:initial_typeahead, idx+1)
+                let l:char = strpart(s:initial_typeahead, 0, l:idx+1)
+                let s:initial_typeahead = strpart(s:initial_typeahead, l:idx+1)
             elseif char2nr(s:initial_typeahead[0]) == 0x80
-                let l:char = s:initial_typeahead[0:1]
-                let s:initial_typeahead = s:initial_typeahead[2:]
+                " vim uses 3-byte encoding for special keys
+                let l:char = strpart(s:initial_typeahead, 0, 3)
+                let s:initial_typeahead = strpart(s:initial_typeahead, 3)
             else
                 let l:char = strcharpart(s:initial_typeahead, 0, 1)
                 let s:initial_typeahead = strcharpart(s:initial_typeahead, 1)
