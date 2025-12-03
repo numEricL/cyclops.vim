@@ -96,5 +96,28 @@ function _op_#utils#GetType(val) abort
     endif
 endfunction
 
+function _op_#utils#HasVersion(ver, ...) abort
+    if has('nvim')
+        return v:true
+    endif
+    if a:0 == 0
+        return v:version >= a:ver
+    else
+        return v:version > a:ver || v:version == a:ver && has('patch'.string(a:1))
+    endif
+endfunction
+
+function _op_#utils#RestoreVisual_COMPAT(handle) abort
+    " this is a workaround for old vim versions without <cmd>
+    if _op_#utils#HasVersion(802, 1978)
+        return
+    endif
+    if a:handle['init']['mode'] =~# '\v^[vV]$' && mode() ==# 'n'
+        let l:selectmode = &selectmode | set selectmode=
+        normal! gv
+        let &selectmode = l:selectmode
+    endif
+endfunction
+
 let &cpo = s:cpo
 unlet s:cpo

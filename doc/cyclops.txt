@@ -360,9 +360,5 @@ Composed Operators~
 * |iminsert| is enabled while processing mappings. This may have unintended
   side effects if language mappings (|:lmap|) are used.
 
-* The plugin is disabled during macro recording due to unpredictable behavior
-  when mixing macros and |feedkeys()|. All mappings work normally, but repeat
-  functionality is disabled during macro recording/execution.
-
 ==============================================================================
 vim:tw=78:ts=8:ft=help:norl:

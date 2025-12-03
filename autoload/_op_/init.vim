@@ -15,7 +15,7 @@ function _op_#init#AssertExprMap() abort
         let l:expr_map = 1
     endtry
     if !l:expr_map
-        throw 'cyclops.vim: Assertion failed: Error while processing map, <expr> map must be used for this plugin'
+        throw 'cyclops.vim: Assertion failed: <expr> must be used for this map'
     endif
 endfunction
 
@@ -106,12 +106,36 @@ function _op_#init#RegisterMap(mapping_type, map) abort
             silent! remove(l:rhs_mapinfo, l:key)
         endif
     endfor
-    try
-        call mapset(l:rhs_mapinfo)
-    catch /^Vim\%((\a\+)\)\=:E119:/
-        call mapset(l:mode, 0, l:rhs_mapinfo)
-    endtry
+    if exists('*mapset')
+        try
+            call mapset(l:rhs_mapinfo)
+        catch /^Vim\%((\a\+)\)\=:E119:/
+            call mapset(l:mode, 0, l:rhs_mapinfo)
+        endtry
+    else
+        call s:MapSet_COMPAT(l:rhs_mapinfo)
+    endif
     return substitute(l:plugmap, '<plug>', "\<plug>", 'g')
+endfunction
+
+function s:MapSet_COMPAT(dict) abort
+  let l:mode = get(a:dict, 'mode', '')
+  let l:lhs = get(a:dict, 'lhs', '')
+  let l:rhs = get(a:dict, 'rhs', '')
+  let l:noremap = get(a:dict, 'noremap', v:false)
+  let l:silent = get(a:dict, 'silent', v:false)
+  let l:expr = get(a:dict, 'expr', v:false)
+  let l:unique = get(a:dict, 'unique', v:false)
+  let l:buffer = get(a:dict, 'buffer', v:false)
+
+  let l:cmd = l:mode
+  let l:cmd ..= l:noremap ? 'noremap'  : 'map'
+  let l:cmd ..= l:silent  ? '<silent>' : ''
+  let l:cmd ..= l:expr    ? '<expr>'   : ''
+  let l:cmd ..= l:unique  ? '<unique>' : ''
+  let l:cmd ..= l:buffer  ? '<buffer>' : ''
+  let l:cmd ..= ' ' . lhs . ' ' . rhs
+  execute l:cmd
 endfunction
 
 function _op_#init#DeprecationNotice(msg) abort

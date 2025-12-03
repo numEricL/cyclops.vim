@@ -33,6 +33,7 @@ function _op_#pair#PairRepeatMap(dir) abort
     call _op_#pair#InitRepeatCallback(l:stored_handle, a:dir)
     let l:id = l:stored_handle['repeat']['id']
 
+    let l:cmd_COMPAT = _op_#utils#HasVersion(802, 1978)? "\<cmd>" : ":\<c-u>"
     if empty(l:stored_handle['pair']['reduced'][l:id])
         " map must be computed first
         let l:stack_handle = _op_#op#StackInit()
@@ -43,9 +44,9 @@ function _op_#pair#PairRepeatMap(dir) abort
         let l:stack_handle['pair']['id'] = l:id
         let l:stack_handle['repeat'] = l:stored_handle['repeat']
         let l:stack_handle['mods'] = l:stored_handle['repeat_mods']
-        return "\<cmd>call _op_#pair#ComputeMapCallback()\<cr>"
+        return l:cmd_COMPAT .. "call _op_#pair#ComputeMapCallback()\<cr>"
     else
-        return "\<cmd>call _op_#pair#RepeatCallback()\<cr>"
+        return l:cmd_COMPAT .. "call _op_#pair#RepeatCallback()\<cr>"
     endif
 endfunction
 
@@ -77,6 +78,7 @@ endfunction
 
 function _op_#pair#RepeatCallback() abort
     let l:handle = _op_#op#GetStoredHandle('pair')
+    call _op_#utils#RestoreVisual_COMPAT(l:handle)
     let l:id = l:handle['repeat']['id']
     let l:expr = l:handle['pair']['reduced'][l:id]
     call inputsave()

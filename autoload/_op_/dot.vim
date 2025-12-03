@@ -75,6 +75,12 @@ function s:InitRepeatCallback(handle) abort
 endfunction
 
 function _op_#dot#RepeatCallback(dummy) abort
+    if !has('nvim') && !_op_#utils#HasVersion(802, 1978)
+        "workaround for old vim bug where vim gets stuck in operator-pending mode
+        call inputsave()
+        call feedkeys("\<esc>", 'x')
+        call inputrestore()
+    endif
     let l:handle = _op_#op#GetStoredHandle('dot')
     call s:Log('dot#RepeatCallback', '', l:handle['expr']['reduced'] .. ' typeahead=' .. _op_#op#ReadTypeaheadTruncated())
     " normal mode dot initializes here, visdot initializes in <expr> map
@@ -167,8 +173,27 @@ endfunction
 
 function s:GetPos(row, col) abort
     " TODO: handle virtual edit case (i.e. offset in getpos())
-    let l:byte_col = virtcol2col(0, a:row, a:col)
+    if has('*virtcol2col')
+        let l:byte_col = virtcol2col(0, a:row, a:col)
+    else
+        let l:byte_col = s:VirtCol2Col_COMPAT(a:row, a:col)
     return [0, a:row, l:byte_col, 0]
+endfunction
+
+function s:VirtCol2Col_COMPAT(line, virtcol) abort
+    let l:line = getline(a:line)
+    let l:col = 1
+    let l:vcol = 1
+    while l:col <= len(l:line) && l:vcol < a:virtcol
+        if l:line[l:col - 1] ==# "\t"
+            let l:tabstop = &tabstop
+            let l:vcol += l:tabstop - ((l:vcol - 1) % l:tabstop)
+        else
+            let l:vcol += 1
+        endif
+        let l:col += 1
+    endwhile
+    return l:col
 endfunction
 
 let &cpo = s:cpo
