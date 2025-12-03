@@ -506,21 +506,20 @@ endfunction
 function s:GetCharStr(mode) abort
     try
         if !empty(s:initial_typeahead)
-            call inputsave()
-            call feedkeys(s:initial_typeahead, '')
-            let l:char = getcharstr()
-            " this case only happens with mappings managed by Cyclops and have the form <plug>(op#...)
-            " note: the sentinel RPAREN is used for `)`
-            if l:char == "\<plug>"
-                let l:end = getcharstr()
-                let l:char ..= l:end
-                while !empty(l:end) && l:end != ')'
-                    let l:end = getcharstr()
-                    let l:char ..= l:end
-                endwhile
+            if s:initial_typeahead =~# '\v^' .. "\<plug>"
+                let idx = stridx(s, ')')
+                if idx == -1
+                    call _op_#op#Throw('Malformed <plug> mapping in initial_typeahead')
+                endif
+                let l:char = strpart(s:initial_typeahead, 0, idx+1)
+                let s:initial_typeahead = strpart(s:initial_typeahead, idx+1)
+            elseif char2nr(s:initial_typeahead[0]) == 0x80
+                let l:char = s:initial_typeahead[0:1]
+                let s:initial_typeahead = s:initial_typeahead[2:]
+            else
+                let l:char = strcharpart(s:initial_typeahead, 0, 1)
+                let s:initial_typeahead = strcharpart(s:initial_typeahead, 1)
             endif
-            let s:initial_typeahead = s:StealTypeahead()
-            call inputrestore()
         else
             let l:char = getcharstr()
         endif
