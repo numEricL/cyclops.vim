@@ -65,6 +65,7 @@ function _op_#pair#InitRepeatCallback(handle, dir) abort
     endif
 
     call extend(a:handle, { 'repeat' : {
+                \ 'init_id' : l:init_id,
                 \ 'id'      : l:id,
                 \ 'mode'    : mode(1),
                 \ } } )

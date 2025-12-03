@@ -503,7 +503,7 @@ function s:GetCharStr(mode) abort
     try
         if !empty(s:initial_typeahead)
             if s:initial_typeahead =~# '\v^' .. "\<plug>"
-                let idx = stridx(s, ')')
+                let idx = stridx(s:initial_typeahead, ')')
                 if idx == -1
                     call _op_#op#Throw('Malformed <plug> mapping in initial_typeahead')
                 endif
