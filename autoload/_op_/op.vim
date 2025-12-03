@@ -15,8 +15,7 @@ set cpo&vim
 
 silent! call _op_#init#settings#Load()
 
-" must be single character
-let s:hijack_probe = '×'
+let s:hijack_probe = g:cyclops_probe_char
 let s:hijack_esc = repeat("\<esc>", 3)
 
 " n-l no-l catches f, F, t, T in lang mode (e.g. fa and dfa)
@@ -92,7 +91,7 @@ endfunction
 function _op_#op#ComputeMapCallback() abort range
     let l:handle = _op_#stack#Top()
     let l:handle['state'] = _op_#utils#GetState()
-    call s:Log('ComputeMapCallback', s:PModes(2), 'expr=' .. l:handle['expr']['orig'] .. ' typeahead=' .. s:TypeaheadLog())
+    call s:Log('ComputeMapCallback', s:PModes(2), 'expr=' .. l:handle['expr']['orig'] .. ' typeahead=' .. s:ReadTypeaheadTruncated())
 
     if _op_#stack#Depth() == 1
         try
@@ -183,9 +182,6 @@ endfunction
 
 function s:SaveInitialTypeahead() abort
     let s:initial_typeahead = s:StealTypeaheadTruncated()
-    if s:initial_typeahead =~# '\v' .. "\<esc>" .. '{' .. g:cyclops_max_trunc_esc .. '}$'
-        call _op_#op#Throw('Typeahead overflow while setting initial_typeahead')
-    endif
     if !empty(s:initial_typeahead)
         call s:Log('SaveInitialTypeahead', '', 'initial_typeahead=' .. s:initial_typeahead)
     endif
@@ -302,7 +298,7 @@ function s:ProcessStream(stream, char) abort
 endfunction
 
 function s:ProbeExpr(expr, type) abort
-    let l:msg = 'FEED_tx!=' .. a:expr .. '<PROBE>' .. ' typeahead=' .. s:TypeaheadLog()
+    let l:msg = 'FEED_tx!=' .. a:expr .. '<PROBE>' .. ' typeahead=' .. s:ReadTypeaheadTruncated()
     let l:stack_id = _op_#stack#Push(a:type, l:msg)
 
     " HijackProbMap may be consumed instead of expanded, set default case
@@ -320,7 +316,7 @@ function s:ProbeExpr(expr, type) abort
 
         " 't' flag fixes an issue when cursor is at end of buffer and '<c-d>' is
         " fed, which prevented the probe from executing.
-        silent call feedkeys(a:expr .. s:hijack_probe .. s:hijack_esc, 'tx!')
+        silent call feedkeys(a:expr .. s:hijack_probe .. s:hijack_esc, 'itx!')
     catch /op#abort/
         throw 'op#abort'
     catch
@@ -373,9 +369,9 @@ function s:ParentCallInit(handle) abort
     let l:calling_expr = l:parent_handle['expr']['reduced']
 
     " remove remnants of hijack_probe .. hijack_esc placed by HijackInput
-    let l:typeahead = s:ReadTypeahead()
-    call s:Log('ParentCallInit', '', 'calling_expr=' .. l:calling_expr .. ' typeahead=' .. s:TypeaheadLog())
-    let l:typeahead = substitute(l:typeahead, '\V' .. s:hijack_probe .. s:hijack_esc .. '\$', '', '')
+    let l:typeahead = s:ReadTypeaheadTruncated()
+    call s:Log('ParentCallInit', '', 'calling_expr=' .. l:calling_expr .. ' typeahead=' .. l:typeahead)
+    let l:typeahead = substitute(l:typeahead, '\V' .. s:hijack_probe .. "\<esc>" .. '\+\$', '', '')
 
     " [already executed] .. [current map call] .. [typeahead] -> [current map call]
     let l:calling_expr = substitute(l:calling_expr, '\V' .. escape(l:typeahead, '\') .. '\$', '', '')
@@ -506,21 +502,22 @@ endfunction
 function s:GetCharStr(mode) abort
     try
         if !empty(s:initial_typeahead)
-            call inputsave()
-            call feedkeys(s:initial_typeahead, '')
-            let l:char = getcharstr()
-            " this case only happens with mappings managed by Cyclops and have the form <plug>(op#...)
-            " note: the sentinel RPAREN is used for `)`
-            if l:char == "\<plug>"
-                let l:end = getcharstr()
-                let l:char ..= l:end
-                while !empty(l:end) && l:end != ')'
-                    let l:end = getcharstr()
-                    let l:char ..= l:end
-                endwhile
+            if s:initial_typeahead =~# '\v^' .. "\<plug>"
+                let l:idx = stridx(s:initial_typeahead, ')')
+                if l:idx == -1
+                    " only <plug>(op#...) is expected here
+                    call _op_#op#Throw('Malformed <plug> mapping in initial_typeahead')
+                endif
+                let l:char = strpart(s:initial_typeahead, 0, l:idx+1)
+                let s:initial_typeahead = strpart(s:initial_typeahead, l:idx+1)
+            elseif char2nr(s:initial_typeahead[0]) == 0x80
+                " vim uses 3-byte encoding for special keys
+                let l:char = strpart(s:initial_typeahead, 0, 3)
+                let s:initial_typeahead = strpart(s:initial_typeahead, 3)
+            else
+                let l:char = strcharpart(s:initial_typeahead, 0, 1)
+                let s:initial_typeahead = strcharpart(s:initial_typeahead, 1)
             endif
-            let s:initial_typeahead = s:StealTypeahead()
-            call inputrestore()
         else
             let l:char = getcharstr()
         endif
@@ -573,44 +570,14 @@ function s:GetCharFromTypeahead(handle) abort
     return l:char
 endfunction
 
-function s:ReadTypeahead() abort
-    let l:typeahead = s:StealTypeahead()
-    call feedkeys(l:typeahead, 'i')
-    return l:typeahead
-endfunction
-
 function s:ReadTypeaheadTruncated() abort
     let l:typeahead = s:StealTypeaheadTruncated()
     call feedkeys(l:typeahead, 'i')
     return l:typeahead
 endfunction
 
-function s:TypeaheadLog() abort
-    let l:typeahead = s:ReadTypeaheadTruncated()
-    let l:typeahead = substitute(l:typeahead, '\v' .. s:hijack_probe .. s:hijack_esc, '<PROBE>', '')
-    let l:typeahead = substitute(l:typeahead, '\v' .. "\<esc>" .. '{' .. g:cyclops_max_trunc_esc .. '}$', '<esc>...', '')
-    return l:typeahead
-endfunction
-
-function _op_#op#TypeaheadLog() abort
-    return s:TypeaheadLog()
-endfunction
-
-function s:StealTypeahead() abort
-    let l:typeahead = ''
-    while getchar(1)
-        let l:char = getcharstr(0)
-        if empty(l:char)
-            call _op_#op#Throw('Empty typeahead char received while stealing typeahead')
-        endif
-        let l:typeahead ..= l:char
-        if strchars(l:typeahead) > g:cyclops_max_input_size
-            call s:Log('STEALTYPEAHEAD', '', 'TYPEAHEAD OVERFLOW')
-            call s:Log('', '', l:typeahead[0:30] .. '...')
-            call _op_#op#Throw('Typeahead overflow while reading typeahead (incomplete command called in normal mode?)')
-        endif
-    endwhile
-    return l:typeahead
+function _op_#op#ReadTypeaheadTruncated() abort
+    return s:ReadTypeaheadTruncated()
 endfunction
 
 function s:StealTypeaheadTruncated() abort

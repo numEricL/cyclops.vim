@@ -57,7 +57,7 @@ function _op_#dot#VisRepeatMap() abort
 endfunction
 
 function s:InitRepeatCallback(handle) abort
-    if (g:cyclops_persistent_count && v:count == 0)
+    if (a:handle['opts']['persistent_count'] && v:count == 0)
         let l:init_count = has_key(a:handle, 'mods')? a:handle['mods']['count'] : 0
         let l:count = has_key(a:handle, 'repeat_mods')? a:handle['repeat_mods']['count'] : l:init_count
     else 
@@ -76,7 +76,7 @@ endfunction
 
 function _op_#dot#RepeatCallback(dummy) abort
     let l:handle = _op_#op#GetStoredHandle('dot')
-    call s:Log('dot#RepeatCallback', '', l:handle['expr']['reduced'] .. ' typeahead=' .. _op_#op#TypeaheadLog())
+    call s:Log('dot#RepeatCallback', '', l:handle['expr']['reduced'] .. ' typeahead=' .. _op_#op#ReadTypeaheadTruncated())
     " normal mode dot initializes here, visdot initializes in <expr> map
     if has_key(l:handle, 'repeat') && get(l:handle['repeat'], 'vdot_init')
         " reset for next dot call
