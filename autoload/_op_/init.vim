@@ -128,14 +128,14 @@ function s:MapSet_COMPAT(dict) abort
   let l:unique = get(a:dict, 'unique', v:false)
   let l:buffer = get(a:dict, 'buffer', v:false)
 
-  let cmd = l:mode
-  let cmd ..= l:noremap ? 'noremap'  : 'map'
-  let cmd ..= l:silent  ? '<silent>' : ''
-  let cmd ..= l:expr    ? '<expr>'   : ''
-  let cmd ..= l:unique  ? '<unique>' : ''
-  let cmd ..= l:buffer  ? '<buffer>' : ''
-  let cmd ..= ' ' . lhs . ' ' . rhs
-  execute cmd
+  let l:cmd = l:mode
+  let l:cmd ..= l:noremap ? 'noremap'  : 'map'
+  let l:cmd ..= l:silent  ? '<silent>' : ''
+  let l:cmd ..= l:expr    ? '<expr>'   : ''
+  let l:cmd ..= l:unique  ? '<unique>' : ''
+  let l:cmd ..= l:buffer  ? '<buffer>' : ''
+  let l:cmd ..= ' ' . lhs . ' ' . rhs
+  execute l:cmd
 endfunction
 
 function _op_#init#DeprecationNotice(msg) abort

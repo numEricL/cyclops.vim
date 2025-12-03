@@ -176,11 +176,11 @@ function s:GetPos(row, col) abort
     if has('*virtcol2col')
         let l:byte_col = virtcol2col(0, a:row, a:col)
     else
-        let l:byte_col = VirtCol2Col_COMPAT(a:row, a:col)
+        let l:byte_col = s:VirtCol2Col_COMPAT(a:row, a:col)
     return [0, a:row, l:byte_col, 0]
 endfunction
 
-function! VirtCol2Col_COMPAT(line, virtcol) abort
+function s:VirtCol2Col_COMPAT(line, virtcol) abort
     let l:line = getline(a:line)
     let l:col = 1
     let l:vcol = 1
