@@ -57,7 +57,7 @@ function _op_#dot#VisRepeatMap() abort
 endfunction
 
 function s:InitRepeatCallback(handle) abort
-    if (g:cyclops_persistent_count && v:count == 0)
+    if (a:handle['opts']['persistent_count'] && v:count == 0)
         let l:init_count = has_key(a:handle, 'mods')? a:handle['mods']['count'] : 0
         let l:count = has_key(a:handle, 'repeat_mods')? a:handle['repeat_mods']['count'] : l:init_count
     else 
