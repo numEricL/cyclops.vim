@@ -90,6 +90,7 @@ endfunction
 
 function _op_#op#ComputeMapCallback() abort range
     let l:handle = _op_#stack#Top()
+    call _op_#utils#RestoreVisual_COMPAT(l:handle)
     let l:handle['state'] = _op_#utils#GetState()
     call s:Log('ComputeMapCallback', s:PModes(2), 'expr=' .. l:handle['expr']['orig'] .. ' typeahead=' .. s:ReadTypeaheadTruncated())
 
@@ -519,7 +520,7 @@ function s:GetCharStr(mode) abort
                 let s:initial_typeahead = strcharpart(s:initial_typeahead, 1)
             endif
         else
-            let l:char = getcharstr()
+            let l:char = s:GetCharStr_COMPAT()
         endif
     catch /^Vim:Interrupt$/
         if !empty(a:mode) && !empty(maparg('<c-c>', a:mode))
@@ -584,8 +585,8 @@ function s:StealTypeaheadTruncated() abort
     let l:typeahead = ''
     let l:count = 0
 
-    while !empty(getcharstr(1)) && l:count < g:cyclops_max_trunc_esc
-        let l:char = getcharstr(0)
+    while getchar(1) && l:count < g:cyclops_max_trunc_esc
+        let l:char = s:GetCharStr_COMPAT(0)
         if empty(l:char)
             call _op_#op#Throw('Empty typeahead char received while stealing typeahead')
         endif
@@ -671,6 +672,18 @@ endfunction
 
 function _op_#op#GetProbe() abort
     return s:hijack_probe .. s:hijack_esc
+endfunction
+
+function s:GetCharStr_COMPAT(...) abort
+    if has('*getcharstr')
+        return a:0? getcharstr(a:1) : getcharstr()
+    else
+        let l:char = a:0? getchar(a:1) : getchar()
+        if l:char =~# '\v^\d+$'
+            let l:char = nr2char(l:char)
+        endif
+        return l:char
+    endif
 endfunction
 
 let &cpo = s:cpo

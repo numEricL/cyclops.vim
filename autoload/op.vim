@@ -16,7 +16,8 @@ function op#Map(map, ...) abort
     let l:handle = _op_#op#StackInit()
     call _op_#op#InitCallback(l:handle, 'op', a:map, s:ExtendDefaultOpts(a:000))
     let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
-    return l:omap_esc .. "\<cmd>call _op_#op#ComputeMapCallback()\<cr>"
+    let l:cmd_COMPAT = _op_#utils#HasVersion(802, 1978)? "\<cmd>" : ":\<c-u>"
+    return l:omap_esc .. l:cmd_COMPAT .. "call _op_#op#ComputeMapCallback()\<cr>"
 endfunction
 
 function op#Noremap(map, ...) abort
@@ -25,7 +26,8 @@ function op#Noremap(map, ...) abort
     let l:handle = _op_#op#StackInit()
     call _op_#op#InitCallback(l:handle, 'op', l:map, s:ExtendDefaultOpts(a:000))
     let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
-    return l:omap_esc .. "\<cmd>call _op_#op#ComputeMapCallback()\<cr>"
+    let l:cmd_COMPAT = _op_#utils#HasVersion(802, 1978)? "\<cmd>" : ":\<c-u>"
+    return l:omap_esc .. l:cmd_COMPAT .. "call _op_#op#ComputeMapCallback()\<cr>"
 endfunction
 
 function op#SetMap(mapping_type, map, ...) abort

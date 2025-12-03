@@ -19,7 +19,8 @@ function pair#MapNext(pair, ...) abort
     call _op_#op#InitCallback(l:handle, 'pair', a:pair[0], s:ExtendDefaultOpts(a:000))
     call _op_#pair#Initcallback(l:handle, a:pair, 'next')
     let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
-    return l:omap_esc .. "\<cmd>call _op_#pair#ComputeMapCallback()\<cr>"
+    let l:cmd_COMPAT = _op_#utils#HasVersion(802, 1978)? "\<cmd>" : ":\<c-u>"
+    return l:omap_esc .. l:cmd_COMPAT .. "call _op_#pair#ComputeMapCallback()\<cr>"
 endfunction
 
 function pair#MapPrev(pair, ...) abort
@@ -29,7 +30,8 @@ function pair#MapPrev(pair, ...) abort
     call _op_#op#InitCallback(l:handle, 'pair', a:pair[1], s:ExtendDefaultOpts(a:000))
     call _op_#pair#Initcallback(l:handle, a:pair, 'prev')
     let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
-    return l:omap_esc .. "\<cmd>call _op_#pair#ComputeMapCallback()\<cr>"
+    let l:cmd_COMPAT = _op_#utils#HasVersion(802, 1978)? "\<cmd>" : ":\<c-u>"
+    return l:omap_esc .. l:cmd_COMPAT .. "call _op_#pair#ComputeMapCallback()\<cr>"
 endfunction
 
 function pair#NoremapNext(pair, ...) abort
@@ -40,7 +42,8 @@ function pair#NoremapNext(pair, ...) abort
     call _op_#op#InitCallback(l:handle, 'pair', l:pair[0], s:ExtendDefaultOpts(a:000))
     call _op_#pair#Initcallback(l:handle, l:pair, 'next')
     let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
-    return l:omap_esc .. "\<cmd>call _op_#pair#ComputeMapCallback()\<cr>"
+    let l:cmd_COMPAT = _op_#utils#HasVersion(802, 1978)? "\<cmd>" : ":\<c-u>"
+    return l:omap_esc .. l:cmd_COMPAT .. "call _op_#pair#ComputeMapCallback()\<cr>"
 endfunction
 
 function pair#NoremapPrev(pair, ...) abort
@@ -51,7 +54,8 @@ function pair#NoremapPrev(pair, ...) abort
     call _op_#op#InitCallback(l:handle, 'pair', l:pair[1], s:ExtendDefaultOpts(a:000))
     call _op_#pair#Initcallback(l:handle, l:pair, 'prev')
     let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
-    return l:omap_esc .. "\<cmd>call _op_#pair#ComputeMapCallback()\<cr>"
+    let l:cmd_COMPAT = _op_#utils#HasVersion(802, 1978)? "\<cmd>" : ":\<c-u>"
+    return l:omap_esc .. l:cmd_COMPAT .. "call _op_#pair#ComputeMapCallback()\<cr>"
 endfunction
 
 function pair#SetMap(mapping_type, pair, ...) abort
