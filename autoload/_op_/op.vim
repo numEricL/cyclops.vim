@@ -15,8 +15,7 @@ set cpo&vim
 
 silent! call _op_#init#settings#Load()
 
-" must be single character
-let s:hijack_probe = '×'
+let s:hijack_probe = g:cyclops_probe_char
 let s:hijack_esc = repeat("\<esc>", 3)
 
 " n-l no-l catches f, F, t, T in lang mode (e.g. fa and dfa)
