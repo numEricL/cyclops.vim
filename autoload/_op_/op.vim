@@ -182,9 +182,6 @@ endfunction
 
 function s:SaveInitialTypeahead() abort
     let s:initial_typeahead = s:StealTypeaheadTruncated()
-    if s:initial_typeahead =~# '\v' .. "\<esc>" .. '{' .. g:cyclops_max_trunc_esc .. '}$'
-        call _op_#op#Throw('Typeahead overflow while setting initial_typeahead')
-    endif
     if !empty(s:initial_typeahead)
         call s:Log('SaveInitialTypeahead', '', 'initial_typeahead=' .. s:initial_typeahead)
     endif
@@ -319,7 +316,7 @@ function s:ProbeExpr(expr, type) abort
 
         " 't' flag fixes an issue when cursor is at end of buffer and '<c-d>' is
         " fed, which prevented the probe from executing.
-        silent call feedkeys(a:expr .. s:hijack_probe .. s:hijack_esc, 'tx!')
+        silent call feedkeys(a:expr .. s:hijack_probe .. s:hijack_esc, 'itx!')
     catch /op#abort/
         throw 'op#abort'
     catch
@@ -372,9 +369,9 @@ function s:ParentCallInit(handle) abort
     let l:calling_expr = l:parent_handle['expr']['reduced']
 
     " remove remnants of hijack_probe .. hijack_esc placed by HijackInput
-    let l:typeahead = s:ReadTypeahead()
-    call s:Log('ParentCallInit', '', 'calling_expr=' .. l:calling_expr .. ' typeahead=' .. s:ReadTypeaheadTruncated())
-    let l:typeahead = substitute(l:typeahead, '\V' .. s:hijack_probe .. s:hijack_esc .. '\$', '', '')
+    let l:typeahead = s:ReadTypeaheadTruncated()
+    call s:Log('ParentCallInit', '', 'calling_expr=' .. l:calling_expr .. ' typeahead=' .. l:typeahead)
+    let l:typeahead = substitute(l:typeahead, '\V' .. s:hijack_probe .. "\<esc>" .. '\+\$', '', '')
 
     " [already executed] .. [current map call] .. [typeahead] -> [current map call]
     let l:calling_expr = substitute(l:calling_expr, '\V' .. escape(l:typeahead, '\') .. '\$', '', '')
@@ -571,12 +568,6 @@ function s:GetCharFromTypeahead(handle) abort
     return l:char
 endfunction
 
-function s:ReadTypeahead() abort
-    let l:typeahead = s:StealTypeahead()
-    call feedkeys(l:typeahead, 'i')
-    return l:typeahead
-endfunction
-
 function s:ReadTypeaheadTruncated() abort
     let l:typeahead = s:StealTypeaheadTruncated()
     call feedkeys(l:typeahead, 'i')
@@ -585,23 +576,6 @@ endfunction
 
 function _op_#op#ReadTypeaheadTruncated() abort
     return s:ReadTypeaheadTruncated()
-endfunction
-
-function s:StealTypeahead() abort
-    let l:typeahead = ''
-    while getchar(1)
-        let l:char = getcharstr(0)
-        if empty(l:char)
-            call _op_#op#Throw('Empty typeahead char received while stealing typeahead')
-        endif
-        let l:typeahead ..= l:char
-        if strchars(l:typeahead) > g:cyclops_max_input_size
-            call s:Log('STEALTYPEAHEAD', '', 'TYPEAHEAD OVERFLOW')
-            call s:Log('', '', l:typeahead[0:30] .. '...')
-            call _op_#op#Throw('Typeahead overflow while reading typeahead (incomplete command called in normal mode?)')
-        endif
-    endwhile
-    return l:typeahead
 endfunction
 
 function s:StealTypeaheadTruncated() abort
