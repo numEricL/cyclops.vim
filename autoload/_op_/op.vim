@@ -92,7 +92,7 @@ endfunction
 function _op_#op#ComputeMapCallback() abort range
     let l:handle = _op_#stack#Top()
     let l:handle['state'] = _op_#utils#GetState()
-    call s:Log('ComputeMapCallback', s:PModes(2), 'expr=' .. l:handle['expr']['orig'] .. ' typeahead=' .. s:TypeaheadLog())
+    call s:Log('ComputeMapCallback', s:PModes(2), 'expr=' .. l:handle['expr']['orig'] .. ' typeahead=' .. s:ReadTypeaheadTruncated())
 
     if _op_#stack#Depth() == 1
         try
@@ -302,7 +302,7 @@ function s:ProcessStream(stream, char) abort
 endfunction
 
 function s:ProbeExpr(expr, type) abort
-    let l:msg = 'FEED_tx!=' .. a:expr .. '<PROBE>' .. ' typeahead=' .. s:TypeaheadLog()
+    let l:msg = 'FEED_tx!=' .. a:expr .. '<PROBE>' .. ' typeahead=' .. s:ReadTypeaheadTruncated()
     let l:stack_id = _op_#stack#Push(a:type, l:msg)
 
     " HijackProbMap may be consumed instead of expanded, set default case
@@ -374,7 +374,7 @@ function s:ParentCallInit(handle) abort
 
     " remove remnants of hijack_probe .. hijack_esc placed by HijackInput
     let l:typeahead = s:ReadTypeahead()
-    call s:Log('ParentCallInit', '', 'calling_expr=' .. l:calling_expr .. ' typeahead=' .. s:TypeaheadLog())
+    call s:Log('ParentCallInit', '', 'calling_expr=' .. l:calling_expr .. ' typeahead=' .. s:ReadTypeaheadTruncated())
     let l:typeahead = substitute(l:typeahead, '\V' .. s:hijack_probe .. s:hijack_esc .. '\$', '', '')
 
     " [already executed] .. [current map call] .. [typeahead] -> [current map call]
@@ -585,15 +585,8 @@ function s:ReadTypeaheadTruncated() abort
     return l:typeahead
 endfunction
 
-function s:TypeaheadLog() abort
-    let l:typeahead = s:ReadTypeaheadTruncated()
-    let l:typeahead = substitute(l:typeahead, '\v' .. s:hijack_probe .. s:hijack_esc, '<PROBE>', '')
-    let l:typeahead = substitute(l:typeahead, '\v' .. "\<esc>" .. '{' .. g:cyclops_max_trunc_esc .. '}$', '<esc>...', '')
-    return l:typeahead
-endfunction
-
-function _op_#op#TypeaheadLog() abort
-    return s:TypeaheadLog()
+function _op_#op#ReadTypeaheadTruncated() abort
+    return s:ReadTypeaheadTruncated()
 endfunction
 
 function s:StealTypeahead() abort

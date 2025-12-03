@@ -76,7 +76,7 @@ endfunction
 
 function _op_#dot#RepeatCallback(dummy) abort
     let l:handle = _op_#op#GetStoredHandle('dot')
-    call s:Log('dot#RepeatCallback', '', l:handle['expr']['reduced'] .. ' typeahead=' .. _op_#op#TypeaheadLog())
+    call s:Log('dot#RepeatCallback', '', l:handle['expr']['reduced'] .. ' typeahead=' .. _op_#op#ReadTypeaheadTruncated())
     " normal mode dot initializes here, visdot initializes in <expr> map
     if has_key(l:handle, 'repeat') && get(l:handle['repeat'], 'vdot_init')
         " reset for next dot call
