@@ -126,7 +126,7 @@ function _op_#utils#Feedkeys(expr, mode, ...) abort
         if a:0 == 1 && ( a:1 ==# 'silent' || a:1 == v:true )
             silent call feedkeys(a:expr, a:mode)
         else
-            call feedkeys(a:expr, a:mode, a:1)
+            call feedkeys(a:expr, a:mode)
         endif
     finally
         let [ &ttimeout, &ttimeoutlen ] = [ l:ttimeout, l:ttimeoutlen ]
