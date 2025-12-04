@@ -98,8 +98,10 @@ function _op_#init#RegisterMap(mapping_type, map) abort
 
     let l:mode = a:mapping_type ==# 'map'? '' : a:mapping_type[0]
     let l:rhs_mapinfo = maparg(a:map, l:mode, 0, 1)
-
-    if l:rhs_mapinfo['rhs'] =~# substitute(l:plugmap, '<plug>', "\<plug>", 'g')
+    if empty(l:rhs_mapinfo)
+        throw 'cyclops.vim: Cannot register non-existent mapping: ' .. a:map
+    endif
+    if get(l:rhs_mapinfo, 'rhs', '') =~# substitute(l:plugmap, '<plug>', "\<plug>", 'g')
         throw 'cyclops.vim: Recursive mapping for ' .. a:map .. ' detected.'
     endif
 
