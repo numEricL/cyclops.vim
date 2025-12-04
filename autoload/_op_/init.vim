@@ -81,7 +81,7 @@ endfunction
 
 function _op_#init#RegisterNoremap(map) abort
     if !has_key(s:noremap_dict, a:map)
-        let l:plugmap  = '<plug>(op#_noremap_' .. s:map_count .. ')'
+        let l:plugmap  = '<plug>(op#noremap_' .. s:map_count .. ')'
         execute 'noremap <silent> ' .. l:plugmap .. ' ' .. a:map
         let s:map_count += 1
         let s:noremap_dict[a:map] = substitute(l:plugmap, '<plug>', "\<plug>", 'g')
@@ -94,18 +94,20 @@ function _op_#init#RegisterMap(mapping_type, map) abort
     call _op_#init#AssertSameRHS(a:map, a:mapping_type)
 
     let l:map_with_sentinel = substitute(a:map, ')', 'RPAREN', 'g')
-    let l:plugmap = '<plug>(op#_' .. a:mapping_type .. '_' .. l:map_with_sentinel .. ')'
-    if !empty(maparg(l:plugmap))
-        throw 'cyclops.vim: Mapping for ' .. l:plugmap .. ' already exists.'
-    endif
-    execute a:mapping_type .. ' ' .. l:plugmap .. ' <nop>'
+    let l:plugmap = '<plug>(op#' .. a:mapping_type .. '_' .. l:map_with_sentinel .. ')'
 
     let l:mode = a:mapping_type ==# 'map'? '' : a:mapping_type[0]
-    let l:lhs_mapinfo = maparg(l:plugmap, l:mode, 0, 1)
     let l:rhs_mapinfo = maparg(a:map, l:mode, 0, 1)
+
+    if l:rhs_mapinfo['rhs'] =~# substitute(l:plugmap, '<plug>', "\<plug>", 'g')
+        throw 'cyclops.vim: Recursive mapping for ' .. a:map .. ' detected.'
+    endif
+
+    execute a:mapping_type .. ' ' .. l:plugmap .. ' <nop>'
+    let l:new_mapinfo = maparg(l:plugmap, l:mode, 0, 1)
     for l:key in ['lhs', 'lhsraw', 'lhsrawalt', 'mode']
-        if has_key(l:lhs_mapinfo, l:key)
-            let l:rhs_mapinfo[l:key] = l:lhs_mapinfo[l:key]
+        if has_key(l:new_mapinfo, l:key)
+            let l:rhs_mapinfo[l:key] = l:new_mapinfo[l:key]
         else
             silent! remove(l:rhs_mapinfo, l:key)
         endif
@@ -138,7 +140,7 @@ function s:MapSet_COMPAT(dict) abort
   let l:cmd ..= l:expr    ? '<expr>'   : ''
   let l:cmd ..= l:unique  ? '<unique>' : ''
   let l:cmd ..= l:buffer  ? '<buffer>' : ''
-  let l:cmd ..= ' ' . lhs . ' ' . rhs
+  let l:cmd ..= ' ' .. lhs .. ' ' .. rhs
   execute l:cmd
 endfunction
 
