@@ -21,6 +21,7 @@ let s:hijack_esc = repeat("\<esc>", 3)
 " n-l no-l catches f, F, t, T in lang mode (e.g. fa and dfa)
 " this pattern matches also n-l-l and v-l-l, but these modes are not possible and this pattern is simpler
 let s:operator_hmode_pattern = '\v^(no[vV]?|consumed|i|c|[nv]-l)(-l)?$'
+let s:operator_end_pattern = '\v^(n|[vV])$'
 
 
 " Problem: feedkeys('dfa×') ends in (lang) operator pending mode
@@ -185,9 +186,11 @@ endfunction
 
 function s:HijackInput(handle) abort
     call s:Log('HijackInput ', s:PModes(2))
-    if s:hijack['hmode'] !~# s:operator_hmode_pattern
+    if s:hijack['hmode'] =~# s:operator_end_pattern
         call s:Log('HijackInput EXIT', '', 'non-operator mode detected: mode=' .. s:hijack['hmode'])
         return ''
+    elseif s:hijack['hmode'] !~# s:operator_hmode_pattern
+        call _op_#op#Throw('Unsupported hijack mode: ' .. string(s:hijack['hmode']) .. '. Please make a feature request.')
     endif
 
     let l:input_stream = ''
@@ -238,9 +241,12 @@ function s:HijackUserInput(handle, input_stream) abort
     let l:op = a:handle['expr']['op']
     let l:expr = a:handle['expr']['reduced']
     let l:input_stream = a:input_stream
-    while s:hijack['hmode'] =~# s:operator_hmode_pattern
+    while s:hijack['hmode'] !~# s:operator_end_pattern
+        if s:hijack['hmode'] !~# s:operator_hmode_pattern
+            call _op_#op#Throw('Unsupported hijack mode: ' .. string(s:hijack['hmode']) .. '. Please make a feature request.')
+        endif
         if s:hijack['cmd_type'] ==# '@'
-            call s:Log('HijackUserInput', s:PModes(2), 'FEED_x!: ' .. l:op .. l:expr .. l:input_stream)
+            call s:Log('HijackUserInput (cmd)', s:PModes(2), 'FEED_x!: ' .. l:op .. l:expr .. l:input_stream)
             let l:reg = getreginfo('i')
             call _op_#utils#RestoreState(a:handle['state'])
             call _op_#utils#Feedkeys('qi', 'n', 'silent')
@@ -254,7 +260,7 @@ function s:HijackUserInput(handle, input_stream) abort
                 " unexpectedly, col('.') inside hijack-probe does not reflect actual cursor pos after inserting a char at beginning of line with feedkeys
                 let l:insert = (getpos("']'")[2] == 1)? 'i' : 'a'
                 let l:char = s:HijackUserChar(a:handle, '')
-                call s:Log('HijackUserInput', s:PModes(2), 'FEED_x!: ' .. l:insert .. l:char .. s:hijack_probe .. s:hijack_esc)
+                call s:Log('HijackUserInput (i loop)', s:PModes(2), 'FEED_x!: ' .. l:insert .. l:char .. s:hijack_probe .. s:hijack_esc)
                 call _op_#utils#Feedkeys(l:insert, 'n', 'silent')
                 call _op_#utils#Feedkeys(l:char .. s:hijack_probe .. s:hijack_esc, 'x!', 'silent')
                 let l:input_stream ..= l:char
@@ -265,7 +271,7 @@ function s:HijackUserInput(handle, input_stream) abort
             let l:char = s:HijackUserChar(a:handle, l:input_stream)
             let l:input_stream = s:ProcessStream(l:input_stream, l:char)
             if s:hijack['hmode'] =~# s:fFtT_op_pending_pattern
-                call s:Log('HijackInput no-l break', '', "feedkeys('dfa×') workaround")
+                call s:Log('HijackUserInput (no-l break)', '', "feedkeys('dfa×') workaround")
                 break
             endif
             call _op_#utils#RestoreState(a:handle['state'])
@@ -339,6 +345,7 @@ execute 'tnoremap  <expr>' .. s:hijack_probe .. ' <sid>HijackProbeMap()'
 
 function s:HijackProbeMap() abort
     let s:hijack = { 'hmode': mode(1), 'cmd': getcmdline(), 'cmd_type': getcmdtype() }
+    call s:Log('HijackProbeMap', '', 'hmode=' .. s:hijack['hmode'] .. ' cmd_type=' .. s:hijack['cmd_type'] .. ' cmd=' .. s:hijack['cmd'] .. ' pumvisible=' .. (pumvisible() ? '1' : '0'))
     return ''
 endfunction
 
