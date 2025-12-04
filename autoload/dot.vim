@@ -10,6 +10,8 @@ silent! call _op_#init#settings#Load()
 let s:AssertExprMap     = function('_op_#init#AssertExprMap')
 let s:ExtendDefaultOpts = function('_op_#init#ExtendDefaultOpts')
 let s:RegisterNoremap   = function('_op_#init#RegisterNoremap')
+let s:RegisterMap       = function('_op_#init#RegisterMap')
+let s:DeprecationNotice = function('_op_#init#DeprecationNotice')
 
 function dot#Map(map, ...) abort
     call s:AssertExprMap()
@@ -39,7 +41,7 @@ endfunction
 
 function s:SetMap(mapping_type, map, opts_dict) abort
     try
-        let l:plugmap = _op_#init#RegisterMap(a:mapping_type, a:map)
+        let l:plugmap = s:RegisterMap(a:mapping_type, a:map)
     catch /op#MAP_noremap/
         echohl ErrorMsg | echomsg 'cyclops.vim: Error: SetMap cannot be used with noremap mappings: ' .. string(a:map) | echohl None
         return
@@ -59,16 +61,16 @@ function dot#SetMaps(mapping_type, maps, ...) abort
     else
         call s:SetMapDeprecated(a:mapping_type, a:maps, l:opts_dict)
     endif
-    call _op_#init#DeprecationNotice('dot#SetMaps is deprecated. Please use dot#SetMap for individual mappings. Suppress this message with g:cyclops_suppress_deprecation_warnings')
+    call s:DeprecationNotice('dot#SetMaps is deprecated. Please use dot#SetMap for individual mappings. Suppress this message with g:cyclops_suppress_deprecation_warnings')
 endfunction
 
 function s:SetMapDeprecated(mapping_type, map, opts_dict) abort
     if a:mapping_type =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)'
         execute a:mapping_type .. ' <expr> ' .. a:map .. ' dot#Noremap(' .. string(a:map) .. ', ' .. string(a:opts_dict) .. ')'
-        call _op_#init#DeprecationNotice('dot#SetMap(s) will no longer support noremap mappings in future releases. Use dot#Noremap instead.')
+        call s:DeprecationNotice('dot#SetMap(s) will no longer support noremap mappings in future releases. Use dot#Noremap instead.')
     else
         try
-            let l:plugmap = _op_#init#RegisterMap(a:mapping_type, a:map)
+            let l:plugmap = s:RegisterMap(a:mapping_type, a:map)
         catch /op#MAP_DNE/
             echohl WarningMsg | echomsg 'cyclops.vim: Warning: Could not set mapping: ' .. string(a:map) .. ' -- mapping does not exist.' | echohl None
             return

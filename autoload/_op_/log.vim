@@ -9,6 +9,16 @@ let s:debug_log = []
 " internal api
 let s:Pad = function('_op_#log#Pad')
 
+function _op_#log#PrintOpMaps() abort
+    redir => l:output
+    silent map <plug>(op#
+    redir END
+    let l:maps = split(l:output, "\n")
+    for l:map in l:maps
+        echom s:ToPrintable(l:map)
+    endfor
+endfunction
+
 function _op_#log#PrintScriptVars() abort range
     for l:line in execute('let g:')->split("\n")->filter('v:val =~# ' .. string('\v^op#'))->sort()
         echomsg 'g:' .. l:line
@@ -121,10 +131,10 @@ function s:ToPrintable(value) abort
         return a:value
     endif
     let l:ctrl_names = [
-                \ '<nul>', '<c-a>', '<c-b>', '<c-c>', '<c-d>', '<c-e>', '<c-f>', '<c-g>',
-                \ '<bs>' , '<tab>', '<nl>' , '<c-k>', '<c-l>', '<cr>' , '<c-n>', '<c-o>',
-                \ '<c-p>', '<c-q>', '<c-r>', '<c-s>', '<c-t>', '<c-u>', '<c-v>', '<c-w>',
-                \ '<c-x>', '<c-y>', '<c-z>', '<esc>', '<fs>' , '<gs>' , '<rs>' , '<us>' ,
+                \ '<NUL>', '<C-A>', '<C-B>', '<C-C>', '<C-D>', '<C-E>', '<C-F>', '<C-G>',
+                \ '<BS>' , '<TAB>', '<NL>' , '<C-K>', '<C-L>', '<CR>' , '<C-N>', '<C-O>',
+                \ '<C-P>', '<C-Q>', '<C-R>', '<C-S>', '<C-T>', '<C-U>', '<C-V>', '<C-W>',
+                \ '<C-X>', '<C-Y>', '<C-Z>', '<ESC>', '<FS>' , '<GS>' , '<RS>' , '<US>' ,
                 \ ]
     let l:value = a:value
     let l:value = substitute(l:value, "\<plug>", '<plug>', 'g')

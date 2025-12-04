@@ -3,6 +3,8 @@ set cpo&vim
 
 silent! call _op_#init#settings#Load()
 
+let s:noremap_dict = {}
+
 function _op_#init#AssertExprMap() abort
     if !g:cyclops_asserts_enabled
         return
@@ -77,12 +79,12 @@ function _op_#init#ExtendDefaultOpts(vargs)
 endfunction
 
 function _op_#init#RegisterNoremap(map) abort
-    let l:map_with_sentinel = substitute(a:map, ')', 'RPAREN', 'g')
-    let l:plugmap = '<plug>(op#_noremap_' .. l:map_with_sentinel .. ')'
-    if empty(maparg(l:plugmap))
+    if !has_key(s:noremap_dict, a:map)
+        let l:plugmap  = '<plug>(op#_noremap_' .. len(s:noremap_dict) .. ')'
         execute 'noremap <silent> ' .. l:plugmap .. ' ' .. a:map
+        let s:noremap_dict[a:map] = substitute(l:plugmap, '<plug>', "\<plug>", 'g')
     endif
-    return substitute(l:plugmap, '<plug>', "\<plug>", 'g')
+    return s:noremap_dict[a:map]
 endfunction
 
 function _op_#init#RegisterMap(mapping_type, map) abort
