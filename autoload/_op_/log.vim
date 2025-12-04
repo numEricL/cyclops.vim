@@ -152,8 +152,8 @@ function s:ToPrintable(value) abort
     return l:output
 endfunction
 
-function s:NoremapTranslate(nr) abort
-    return '<plug>(op#noremap_' .. _op_#init#NoremapInvertLookup(a:nr) .. ')'
+function s:NoremapTranslate(str_nr) abort
+    return '<plug>(op#noremap_' .. _op_#init#NoremapInvertLookup(str2nr(a:str_nr)) .. ')'
 endfunction
 
 let &cpo = s:cpo
