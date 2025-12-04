@@ -10,12 +10,14 @@ silent! call _op_#init#settings#Load()
 let s:AssertExprMap     = function('_op_#init#AssertExprMap')
 let s:AssertPair        = function('_op_#init#AssertPair')
 let s:ExtendDefaultOpts = function('_op_#init#ExtendDefaultOpts')
-let s:StackInit         = function('_op_#op#StackInit')
+let s:RegisterNoremap   = function('_op_#init#RegisterNoremap')
+let s:RegisterMap       = function('_op_#init#RegisterMap')
+let s:DeprecationNotice = function('_op_#init#DeprecationNotice')
 
 function pair#MapNext(pair, ...) abort
     call s:AssertExprMap()
     call s:AssertPair(a:pair)
-    let l:handle = s:StackInit()
+    let l:handle = _op_#op#StackInit()
     call _op_#op#InitCallback(l:handle, 'pair', a:pair[0], s:ExtendDefaultOpts(a:000))
     call _op_#pair#Initcallback(l:handle, a:pair, 'next')
     let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
@@ -26,7 +28,7 @@ endfunction
 function pair#MapPrev(pair, ...) abort
     call s:AssertExprMap()
     call s:AssertPair(a:pair)
-    let l:handle = s:StackInit()
+    let l:handle = _op_#op#StackInit()
     call _op_#op#InitCallback(l:handle, 'pair', a:pair[1], s:ExtendDefaultOpts(a:000))
     call _op_#pair#Initcallback(l:handle, a:pair, 'prev')
     let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
@@ -38,7 +40,7 @@ function pair#NoremapNext(pair, ...) abort
     call s:AssertExprMap()
     call s:AssertPair(a:pair)
     let l:pair = s:RegisterNoremapPair(a:pair)
-    let l:handle = s:StackInit()
+    let l:handle = _op_#op#StackInit()
     call _op_#op#InitCallback(l:handle, 'pair', l:pair[0], s:ExtendDefaultOpts(a:000))
     call _op_#pair#Initcallback(l:handle, l:pair, 'next')
     let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
@@ -50,7 +52,7 @@ function pair#NoremapPrev(pair, ...) abort
     call s:AssertExprMap()
     call s:AssertPair(a:pair)
     let l:pair = s:RegisterNoremapPair(a:pair)
-    let l:handle = s:StackInit()
+    let l:handle = _op_#op#StackInit()
     call _op_#op#InitCallback(l:handle, 'pair', l:pair[1], s:ExtendDefaultOpts(a:000))
     call _op_#pair#Initcallback(l:handle, l:pair, 'prev')
     let l:omap_esc = (mode(1)[:1] ==# 'no')? "\<esc>" : ""
@@ -78,14 +80,14 @@ function s:SetMap(mapping_type, pair, opts_dict) abort
 endfunction
 
 function s:RegisterNoremapPair(pair) abort
-    let l:map0 = _op_#init#RegisterNoremap(a:pair[0])
-    let l:map1 = _op_#init#RegisterNoremap(a:pair[1])
+    let l:map0 = s:RegisterNoremap(a:pair[0])
+    let l:map1 = s:RegisterNoremap(a:pair[1])
     return [ l:map0, l:map1 ]
 endfunction
 
 function s:RegisterMapPair(mapping_type, pair) abort
-    let l:map0 = _op_#init#RegisterMap(a:mapping_type, a:pair[0])
-    let l:map1 = _op_#init#RegisterMap(a:mapping_type, a:pair[1])
+    let l:map0 = s:RegisterMap(a:mapping_type, a:pair[0])
+    let l:map1 = s:RegisterMap(a:mapping_type, a:pair[1])
     return [ l:map0, l:map1 ]
 endfunction
 
@@ -98,14 +100,14 @@ function pair#SetMaps(mapping_type, pairs, ...) abort
     else
         call s:SetMapDeprecated(a:mapping_type, a:pairs, l:opts_dict)
     endif
-    call _op_#init#DeprecationNotice('pair#SetMaps is deprecated. Please use pair#SetMap for individual mappings. Suppress this message with g:cyclops_suppress_deprecation_warnings')
+    call s:DeprecationNotice('pair#SetMaps is deprecated. Please use pair#SetMap for individual mappings. Suppress this message with g:cyclops_suppress_deprecation_warnings')
 endfunction
 
 function s:SetMapDeprecated(mapping_type, pair, opts_dict) abort
     if a:mapping_type =~# '\v^(no|nn|vn|xn|sno|ono|no|ino|ln|cno|tno)'
         execute a:mapping_type .. ' <expr> ' .. a:pair[0] .. ' pair#NoremapNext(' .. string(a:pair) .. ', ' .. string(a:opts_dict) .. ')'
         execute a:mapping_type .. ' <expr> ' .. a:pair[1] .. ' pair#NoremapPrev(' .. string(a:pair) .. ', ' .. string(a:opts_dict) .. ')'
-        call _op_#init#DeprecationNotice('pair#SetMap(s) will no longer support noremap mappings in future releases. Use pair#NoremapNext/Prev instead.')
+        call s:DeprecationNotice('pair#SetMap(s) will no longer support noremap mappings in future releases. Use pair#NoremapNext/Prev instead.')
     else
         try
             let l:plugpair = s:RegisterMapPair(a:mapping_type, a:pair)

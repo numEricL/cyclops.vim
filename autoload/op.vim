@@ -10,6 +10,7 @@ silent! call _op_#init#settings#Load()
 let s:AssertExprMap     = function('_op_#init#AssertExprMap')
 let s:ExtendDefaultOpts = function('_op_#init#ExtendDefaultOpts')
 let s:RegisterNoremap   = function('_op_#init#RegisterNoremap')
+let s:RegisterMap       = function('_op_#init#RegisterMap')
 
 function op#Map(map, ...) abort
     call s:AssertExprMap()
@@ -37,7 +38,7 @@ endfunction
 
 function s:SetMap(mapping_type, map, opts_dict) abort
     try
-        let l:plugmap = _op_#init#RegisterMap(a:mapping_type, a:map)
+        let l:plugmap = s:RegisterMap(a:mapping_type, a:map)
     catch /op#MAP_noremap/
         echohl ErrorMsg | echomsg 'cyclops.vim: Error: SetMap cannot be used with noremap mappings: ' .. string(a:map) | echohl None
         return
@@ -54,6 +55,10 @@ endfunction
 
 function op#PrintScriptVars() abort
     call _op_#log#PrintScriptVars()
+endfunction
+
+function op#PrintOpMaps() abort
+    call _op_#log#PrintOpMaps()
 endfunction
 
 let &cpo = s:cpo
