@@ -142,7 +142,7 @@ function s:MapSet_COMPAT(dict) abort
   let l:cmd ..= l:expr    ? '<expr>'   : ''
   let l:cmd ..= l:unique  ? '<unique>' : ''
   let l:cmd ..= l:buffer  ? '<buffer>' : ''
-  let l:cmd ..= ' ' .. lhs .. ' ' .. rhs
+  let l:cmd ..= ' ' .. l:lhs .. ' ' .. l:rhs
   execute l:cmd
 endfunction
 
