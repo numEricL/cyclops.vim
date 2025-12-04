@@ -7,9 +7,6 @@ let s:map_count = 0
 let s:noremap_dict = {}
 let s:noremap_invert = []
 
-let g:noremap_dict = s:noremap_dict
-let g:noremap_invert = s:noremap_invert
-
 function _op_#init#AssertExprMap() abort
     if !g:cyclops_asserts_enabled
         return
