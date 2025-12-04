@@ -143,12 +143,17 @@ function s:ToPrintable(value) abort
     let l:value = substitute(l:value, _op_#op#GetProbe(), '<PROBE>', 'g')
     " <PROBE> adds 3 <esc>
     let l:value = substitute(l:value, '\v' .. "\<esc>" .. '{' .. (g:cyclops_max_trunc_esc - 3) .. ',}$', '<esc>...', '')
+    let l:value = substitute(l:value, '\V<plug>(op#noremap_\(\d\+\))', '\=s:NoremapTranslate(submatch(1))', 'g')
     let l:output = ''
     for l:char in split(l:value, '\zs')
         let l:nr = char2nr(l:char)
         let l:output ..= (l:nr < 32)? l:ctrl_names[l:nr] : l:char
     endfor
     return l:output
+endfunction
+
+function s:NoremapTranslate(str_nr) abort
+    return '<plug>(op#noremap_' .. _op_#init#NoremapInvertLookup(str2nr(a:str_nr)) .. ')'
 endfunction
 
 let &cpo = s:cpo

@@ -5,6 +5,7 @@ silent! call _op_#init#settings#Load()
 
 let s:map_count = 0
 let s:noremap_dict = {}
+let s:noremap_invert = []
 
 function _op_#init#AssertExprMap() abort
     if !g:cyclops_asserts_enabled
@@ -85,6 +86,7 @@ function _op_#init#RegisterNoremap(map) abort
         execute 'noremap <silent> ' .. l:plugmap .. ' ' .. a:map
         let s:map_count += 1
         let s:noremap_dict[a:map] = substitute(l:plugmap, '<plug>', "\<plug>", 'g')
+        call add(s:noremap_invert, a:map)
     endif
     return s:noremap_dict[a:map]
 endfunction
@@ -144,6 +146,10 @@ function s:MapSet_COMPAT(dict) abort
   let l:cmd ..= l:buffer  ? '<buffer>' : ''
   let l:cmd ..= ' ' .. l:lhs .. ' ' .. l:rhs
   execute l:cmd
+endfunction
+
+function _op_#init#NoremapInvertLookup(nr) abort
+    return get(s:noremap_invert, a:nr, '')
 endfunction
 
 function _op_#init#DeprecationNotice(msg) abort
