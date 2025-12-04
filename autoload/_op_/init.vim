@@ -3,6 +3,7 @@ set cpo&vim
 
 silent! call _op_#init#settings#Load()
 
+let s:map_count = 0
 let s:noremap_dict = {}
 
 function _op_#init#AssertExprMap() abort
@@ -80,8 +81,9 @@ endfunction
 
 function _op_#init#RegisterNoremap(map) abort
     if !has_key(s:noremap_dict, a:map)
-        let l:plugmap  = '<plug>(op#_noremap_' .. len(s:noremap_dict) .. ')'
+        let l:plugmap  = '<plug>(op#_noremap_' .. s:map_count .. ')'
         execute 'noremap <silent> ' .. l:plugmap .. ' ' .. a:map
+        let s:map_count += 1
         let s:noremap_dict[a:map] = substitute(l:plugmap, '<plug>', "\<plug>", 'g')
     endif
     return s:noremap_dict[a:map]
