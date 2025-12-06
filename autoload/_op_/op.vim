@@ -249,9 +249,9 @@ function s:HijackUserInput(handle, input_stream) abort
             call s:Log('HijackUserInput (cmd)', s:PModes(2), 'FEED_x!: ' .. l:op .. l:expr .. l:input_stream)
             let l:reg = getreginfo('i')
             call _op_#utils#RestoreState(a:handle['state'])
-            call _op_#utils#Feedkeys('qi', 'n', 'silent')
-            call _op_#utils#Feedkeys(l:op .. l:expr .. l:input_stream, 'x!', 'silent')
-            call _op_#utils#Feedkeys('q', 'nx', 'silent')
+            call _op_#utils#Feedkeys('qi', 'n')
+            call _op_#utils#Feedkeys(l:op .. l:expr .. l:input_stream, 'x!')
+            call _op_#utils#Feedkeys('q', 'nx')
             let l:input_stream ..= getreg('i')
             call setreg('i', l:reg)
             call s:ProbeExpr('', 'hijack input()')
@@ -261,8 +261,8 @@ function s:HijackUserInput(handle, input_stream) abort
                 let l:insert = (getpos("']'")[2] == 1)? 'i' : 'a'
                 let l:char = s:HijackUserChar(a:handle, '')
                 call s:Log('HijackUserInput (i loop)', s:PModes(2), 'FEED_x!: ' .. l:insert .. l:char .. s:hijack_probe .. s:hijack_esc)
-                call _op_#utils#Feedkeys(l:insert, 'n', 'silent')
-                call _op_#utils#Feedkeys(l:char .. s:hijack_probe .. s:hijack_esc, 'x!', 'silent')
+                call _op_#utils#Feedkeys(l:insert, 'n')
+                call _op_#utils#Feedkeys(l:char .. s:hijack_probe .. s:hijack_esc, 'x!')
                 let l:input_stream ..= l:char
             endwhile
             call _op_#utils#RestoreState(a:handle['state'])
