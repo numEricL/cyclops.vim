@@ -118,9 +118,9 @@ function _op_#op#ComputeMapCallback() abort range
             call _op_#utils#RestoreState(l:handle['state'])
             let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:handle['mods'], l:handle['opts'], l:handle['expr']['op'])
             call s:Log('EXIT', s:PModes(0), 'FEED_tx!=' .. l:expr_with_modifiers .. s:initial_typeahead)
-            call _op_#utils#Feedkeys(l:expr_with_modifiers, 'tx!', l:handle['opts']['silent'])
+            call _op_#utils#Feedkeys(l:expr_with_modifiers, 'tx!')
         endif
-        call _op_#utils#Feedkeys(s:initial_typeahead, '', l:handle['opts']['silent'])
+        call _op_#utils#Feedkeys(s:initial_typeahead, '')
         call s:MacroResume(l:handle)
         call _op_#stack#Pop(0, 'StackInit')
     endif
@@ -128,7 +128,7 @@ endfunction
 
 function s:MacroStop(handle) abort
     if !empty(a:handle['init']['reg_recording'])
-        silent execute 'normal! q'
+        execute 'normal! q'
         let s:macro_content = getreg(a:handle['init']['reg_recording'])
         call s:Log('MacroStop', '', 'macro_content=' .. s:macro_content)
     endif
@@ -137,14 +137,14 @@ endfunction
 function s:MacroResume(handle) abort
     if !empty(a:handle['init']['reg_recording'])
         call setreg(tolower(a:handle['init']['reg_recording']), s:macro_content .. join(s:inputs, ''))
-        silent execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
+        execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
     endif
 endfunction
 
 function s:MacroAbort(handle) abort
     if !empty(a:handle['init']['reg_recording'])
         call setreg(tolower(a:handle['init']['reg_recording']), s:macro_content)
-        silent execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
+        execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
     endif
 endfunction
 
@@ -172,7 +172,7 @@ function s:ComputeMapOnStack(handle) abort
 
         call _op_#utils#RestoreState(a:handle['state'])
         call s:Log('ComputeMapOnStack', 'EXIT', 'FEED_tx!=' .. a:handle['expr']['op'] .. a:handle['expr']['reduced'])
-        call _op_#utils#Feedkeys(a:handle['expr']['op'] .. a:handle['expr']['reduced'], 'tx!', 'silent')
+        call _op_#utils#Feedkeys(a:handle['expr']['op'] .. a:handle['expr']['reduced'], 'tx!')
         call inputrestore()
     endif
 endfunction
@@ -316,7 +316,7 @@ function s:ProbeExpr(expr, type) abort
 
         " 't' flag fixes an issue when cursor is at end of buffer and '<c-d>' is
         " fed, which prevented the probe from executing.
-        call _op_#utils#Feedkeys(a:expr .. s:hijack_probe .. s:hijack_esc, 'itx!', 'silent')
+        call _op_#utils#Feedkeys(a:expr .. s:hijack_probe .. s:hijack_esc, 'itx!')
     catch /op#abort/
         throw 'op#abort'
     catch

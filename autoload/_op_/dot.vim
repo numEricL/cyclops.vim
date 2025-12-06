@@ -23,7 +23,9 @@ endfunction
 
 function _op_#dot#ComputeMapCallback() abort
     call _op_#op#ComputeMapCallback()
-    silent! call repeat#invalidate() " disable vim-repeat if present
+    if exists("g:loaded_repeat")
+        silent! call repeat#invalidate() " disable vim-repeat if present
+    endif
     if empty(_op_#stack#GetException())
         let l:handle = _op_#op#GetStoredHandle('dot')
         let l:handle['dot']['exit_mode'] = mode(1)
@@ -96,26 +98,28 @@ function _op_#dot#RepeatCallback(dummy) abort
     if l:handle['opts']['accepts_count']
         let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:handle['repeat_mods'], l:handle['opts'])
         call s:RestoreRepeatEntry(l:handle)
-        call _op_#utils#Feedkeys(l:expr_with_modifiers, 'tx!', l:handle['opts']['silent'])
+        call _op_#utils#Feedkeys(l:expr_with_modifiers, 'tx!')
     else
         let l:mods = extend({'count': 0}, l:handle['repeat_mods'], 'keep')
         let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:mods, l:handle['opts'])
         let l:count1 = max([1, l:handle['repeat_mods']['count']])
         for _ in range(l:count1)
             call s:RestoreRepeatEntry(l:handle)
-            call _op_#utils#Feedkeys(l:expr_with_modifiers, 'tx!', l:handle['opts']['silent'])
+            call _op_#utils#Feedkeys(l:expr_with_modifiers, 'tx!')
             call s:InitRepeatCallback(l:handle)
         endfor
     endif
     let &operatorfunc = '_op_#dot#RepeatCallback'
-    silent! call repeat#invalidate() " disable vim-repeat if present
+    if exists("g:loaded_repeat")
+        silent! call repeat#invalidate() " disable vim-repeat if present
+    endif
     call inputrestore()
     call s:MacroResume(l:handle)
 endfunction
 
 function s:MacroStop(handle) abort
     if a:handle['repeat']['reg_recording'] !=# ''
-        silent execute 'normal! q'
+        execute 'normal! q'
         let s:macro_content = getreg(a:handle['repeat']['reg_recording'])
     endif
 endfunction
@@ -123,7 +127,7 @@ endfunction
 function s:MacroResume(handle) abort
     if !empty(a:handle['repeat']['reg_recording'])
         call setreg(tolower(a:handle['repeat']['reg_recording']), s:macro_content)
-        silent execute 'normal! q' .. toupper(a:handle['repeat']['reg_recording'])
+        execute 'normal! q' .. toupper(a:handle['repeat']['reg_recording'])
     endif
 endfunction
 
