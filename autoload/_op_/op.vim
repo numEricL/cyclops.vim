@@ -30,7 +30,7 @@ let s:fFtT_op_pending_pattern = '\v^(no[vV]?-l)$'
 
 let s:hijack = {'hmode': '', 'cmd': '', 'cmd_type': ''}
 let s:initial_typeahead = ''
-let s:inputs = []
+let s:inputs = { 'list': [], 'id': -1 }
 let s:operand = { 'expr': '', 'input': '' }
 let s:probe_exception = { 'status': v:false, 'expr': '', 'exception': '' }
 let s:macro_content = ''
@@ -54,9 +54,7 @@ function s:InitScriptVars()
     call extend(s:operand, { 'expr': '', 'input': '' } )
     call extend(s:hijack, { 'hmode': '', 'cmd': '', 'cmd_type': '' } ) " init early for s:Log
     call extend(s:probe_exception, { 'status': v:false, 'expr': '', 'exception': '' } )
-    if !empty(s:inputs)
-        call remove(s:inputs, 0, -1)
-    endif
+    call _op_#utils#QueueReset(s:inputs)
 endfunction
 
 function _op_#op#StackInit() abort
@@ -137,7 +135,7 @@ endfunction
 
 function s:MacroResume(handle) abort
     if !empty(a:handle['init']['reg_recording'])
-        call setreg(tolower(a:handle['init']['reg_recording']), s:macro_content .. join(s:inputs, ''))
+        call setreg(tolower(a:handle['init']['reg_recording']), s:macro_content .. join(s:inputs['list'], ''))
         execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
     endif
 endfunction
@@ -199,10 +197,16 @@ function s:HijackInput(handle) abort
     let l:expr = a:handle['expr']['reduced']
 
     if a:handle['init']['input_source'] ==# 'cache'
-        let l:input_stream = remove(a:handle['expr']['inputs'], 0)
+        let l:input_stream = _op_#utils#QueueNext(a:handle['expr']['inputs'])
         call s:Log('HijackInput', '', 'cached input=' .. l:input_stream)
         call _op_#utils#RestoreState(a:handle['state'])
         call s:ProbeExpr(l:op .. l:expr .. l:input_stream, 'cache')
+        return l:input_stream
+    elseif a:handle['init']['input_source'] ==# 'stack_cache'
+        let l:input_stream = _op_#utils#QueueNext(s:inputs)
+        call s:Log('HijackInput', '', 'stack cached input=' .. l:input_stream)
+        call _op_#utils#RestoreState(a:handle['state'])
+        call s:ProbeExpr(l:op .. l:expr .. l:input_stream, 'stack cache')
         return l:input_stream
     endif
 
@@ -226,12 +230,12 @@ function s:HijackInput(handle) abort
         let s:operand = { 'expr': a:handle['expr']['reduced'], 'input': l:input_stream }
     else
         if !empty(s:operand['expr'])
-            call add(s:inputs, s:operand['expr'])
-            call add(s:inputs, s:operand['input'])
+            call _op_#utils#QueuePush(s:inputs, s:operand['expr'])
+            call _op_#utils#QueuePush(s:inputs, s:operand['input'])
             let l:input_stream = ''
         else
             call s:Log('HijackInput', 'store', l:input_stream)
-            call add(s:inputs, l:input_stream)
+            call _op_#utils#QueuePush(s:inputs, l:input_stream)
         endif
     endif
 
@@ -598,10 +602,12 @@ function s:StoreHandle(handle) abort
     call s:Log('StoreHandle ' .. a:handle['init']['handle_type'], '', 'expr=' .. a:handle['expr']['reduced'])
     let l:handle_to_store = deepcopy(a:handle)
 
-    if a:handle['init']['op_type'] ==# 'operand'
-        call extend(l:handle_to_store['expr'], { 'inputs': [s:operand['input']] })
-    else
-        call extend(l:handle_to_store['expr'], { 'inputs': deepcopy(s:inputs) })
+    if a:handle['init']['input_source'] ==# 'user'
+        if a:handle['init']['op_type'] ==# 'operand'
+            call extend(l:handle_to_store['expr'], { 'inputs': [s:operand['input']] })
+        else
+            call extend(l:handle_to_store['expr'], { 'inputs': deepcopy(s:inputs) })
+        endif
     endif
     call remove(l:handle_to_store, 'stack')
 

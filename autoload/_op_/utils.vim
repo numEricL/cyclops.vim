@@ -25,9 +25,9 @@ function _op_#utils#RestoreState(state) abort
     call win_gotoid(a:state['winid'])
 
     let l:cur_bufnr = bufnr()
-    execute 'buffer ' .. a:state['bufnr']
-    execute 'undo ' .. a:state['undo_pos']
-    execute 'buffer ' .. l:cur_bufnr
+    silent execute 'buffer ' .. a:state['bufnr']
+    silent execute 'undo ' .. a:state['undo_pos']
+    silent execute 'buffer ' .. l:cur_bufnr
 
     call _op_#utils#RestoreVisualState(a:state['v_state'])
     call winrestview(a:state['win'])
@@ -128,6 +128,22 @@ function _op_#utils#Feedkeys(expr, mode) abort
         let [ &ttimeout, &ttimeoutlen ] = [ l:ttimeout, l:ttimeoutlen ]
         let [ &timeout, &timeoutlen ]   = [ l:timeout, l:timeoutlen ]
     endtry
+endfunction
+
+function _op_#utils#QueueReset(queue) abort
+    let a:queue['id'] = -1
+    if !empty(a:queue['list'])
+        call remove(a:queue['list'], 0, -1)
+    endif
+endfunction
+
+function _op_#utils#QueuePush(queue, item) abort
+    call add(a:queue['list'], a:item)
+endfunction
+
+function _op_#utils#QueueNext(queue) abort
+    let a:queue['id'] += 1
+    return a:queue['list'][a:queue['id']]
 endfunction
 
 let &cpo = s:cpo
