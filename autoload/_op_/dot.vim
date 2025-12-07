@@ -22,7 +22,10 @@ function _op_#dot#InitCallback(handle) abort
 endfunction
 
 function _op_#dot#ComputeMapCallback() abort
-    call _op_#op#ComputeMapCallback()
+    let l:result = _op_#op#ComputeMapCallback()
+    if l:result ==# 'op#insert_callback'
+        return
+    endif
     if exists("g:loaded_repeat")
         silent! call repeat#invalidate() " disable vim-repeat if present
     endif
