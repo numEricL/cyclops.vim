@@ -137,13 +137,13 @@ function s:ToPrintable(value) abort
                 \ '<C-X>', '<C-Y>', '<C-Z>', '<ESC>', '<FS>' , '<GS>' , '<RS>' , '<US>' ,
                 \ ]
     let l:value = a:value
-    let l:value = substitute(l:value, "\<plug>", '<plug>', 'g')
-    let l:value = substitute(l:value, "\<cmd>" , '<cmd>' , 'g')
-    let l:value = substitute(l:value, "\<bs>"  , '<bs>'  , 'g')
+    let l:value = substitute(l:value, "\<plug>", '<PLUG>', 'g')
+    let l:value = substitute(l:value, "\<cmd>" , '<CMD>' , 'g')
+    let l:value = substitute(l:value, "\<bs>"  , '<BS>'  , 'g')
     let l:value = substitute(l:value, _op_#op#GetProbe(), '<PROBE>', 'g')
     " <PROBE> adds 3 <esc>
     let l:value = substitute(l:value, '\v' .. "\<esc>" .. '{' .. (g:cyclops_max_trunc_esc - 3) .. ',}$', '<esc>...', '')
-    let l:value = substitute(l:value, '\V<plug>(op#noremap_\(\d\+\))', '\=s:NoremapTranslate(submatch(1))', 'g')
+    let l:value = substitute(l:value, '\V<PLUG>(op#noremap_\(\d\+\))', '\=s:NoremapTranslate(submatch(1))', 'g')
     let l:output = ''
     for l:char in split(l:value, '\zs')
         let l:nr = char2nr(l:char)
@@ -153,7 +153,7 @@ function s:ToPrintable(value) abort
 endfunction
 
 function s:NoremapTranslate(str_nr) abort
-    return '<plug>(op#noremap_' .. _op_#init#NoremapInvertLookup(str2nr(a:str_nr)) .. ')'
+    return '<PLUG>(op#noremap_' .. _op_#init#NoremapInvertLookup(str2nr(a:str_nr)) .. ')'
 endfunction
 
 let &cpo = s:cpo

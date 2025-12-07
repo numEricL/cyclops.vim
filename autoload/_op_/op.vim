@@ -118,9 +118,9 @@ function _op_#op#ComputeMapCallback() abort range
             call _op_#utils#RestoreState(l:handle['state'])
             let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:handle['mods'], l:handle['opts'], l:handle['expr']['op'])
             call s:Log('EXIT', s:PModes(0), 'FEED_tx!=' .. l:expr_with_modifiers .. s:initial_typeahead)
-            call _op_#utils#Feedkeys(l:expr_with_modifiers, 'tx!', l:handle['opts']['silent'])
+            call _op_#utils#Feedkeys(l:expr_with_modifiers, 'tx!')
         endif
-        call _op_#utils#Feedkeys(s:initial_typeahead, '', l:handle['opts']['silent'])
+        call _op_#utils#Feedkeys(s:initial_typeahead, '')
         call s:MacroResume(l:handle)
         call _op_#stack#Pop(0, 'StackInit')
     endif
@@ -128,7 +128,7 @@ endfunction
 
 function s:MacroStop(handle) abort
     if !empty(a:handle['init']['reg_recording'])
-        silent execute 'normal! q'
+        execute 'normal! q'
         let s:macro_content = getreg(a:handle['init']['reg_recording'])
         let s:macro_content = substitute(s:macro_content, '\V' .. escape(s:initial_typeahead, '\') .. '\$', '', '')
         call s:Log('MacroStop', '', 'macro_content=' .. s:macro_content)
@@ -138,14 +138,14 @@ endfunction
 function s:MacroResume(handle) abort
     if !empty(a:handle['init']['reg_recording'])
         call setreg(tolower(a:handle['init']['reg_recording']), s:macro_content .. join(s:inputs, ''))
-        silent execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
+        execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
     endif
 endfunction
 
 function s:MacroAbort(handle) abort
     if !empty(a:handle['init']['reg_recording'])
         call setreg(tolower(a:handle['init']['reg_recording']), s:macro_content)
-        silent execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
+        execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
     endif
 endfunction
 
@@ -173,7 +173,7 @@ function s:ComputeMapOnStack(handle) abort
 
         call _op_#utils#RestoreState(a:handle['state'])
         call s:Log('ComputeMapOnStack', 'EXIT', 'FEED_tx!=' .. a:handle['expr']['op'] .. a:handle['expr']['reduced'])
-        call _op_#utils#Feedkeys(a:handle['expr']['op'] .. a:handle['expr']['reduced'], 'tx!', 'silent')
+        call _op_#utils#Feedkeys(a:handle['expr']['op'] .. a:handle['expr']['reduced'], 'tx!')
         call inputrestore()
     endif
 endfunction
@@ -250,9 +250,9 @@ function s:HijackUserInput(handle, input_stream) abort
             call s:Log('HijackUserInput (cmd)', s:PModes(2), 'FEED_x!: ' .. l:op .. l:expr .. l:input_stream)
             let l:reg = getreginfo('i')
             call _op_#utils#RestoreState(a:handle['state'])
-            call _op_#utils#Feedkeys('qi', 'n', 'silent')
-            call _op_#utils#Feedkeys(l:op .. l:expr .. l:input_stream, 'x!', 'silent')
-            call _op_#utils#Feedkeys('q', 'nx', 'silent')
+            call _op_#utils#Feedkeys('qi', 'n')
+            call _op_#utils#Feedkeys(l:op .. l:expr .. l:input_stream, 'x!')
+            call _op_#utils#Feedkeys('q', 'nx')
             let l:input_stream ..= getreg('i')
             call setreg('i', l:reg)
             call s:ProbeExpr('', 'hijack input()')
@@ -262,8 +262,8 @@ function s:HijackUserInput(handle, input_stream) abort
                 let l:insert = (getpos("']'")[2] == 1)? 'i' : 'a'
                 let l:char = s:HijackUserChar(a:handle, '')
                 call s:Log('HijackUserInput (i loop)', s:PModes(2), 'FEED_x!: ' .. l:insert .. l:char .. s:hijack_probe .. s:hijack_esc)
-                call _op_#utils#Feedkeys(l:insert, 'n', 'silent')
-                call _op_#utils#Feedkeys(l:char .. s:hijack_probe .. s:hijack_esc, 'x!', 'silent')
+                call _op_#utils#Feedkeys(l:insert, 'n')
+                call _op_#utils#Feedkeys(l:char .. s:hijack_probe .. s:hijack_esc, 'x!')
                 let l:input_stream ..= l:char
             endwhile
             call _op_#utils#RestoreState(a:handle['state'])
@@ -317,7 +317,7 @@ function s:ProbeExpr(expr, type) abort
 
         " 't' flag fixes an issue when cursor is at end of buffer and '<c-d>' is
         " fed, which prevented the probe from executing.
-        call _op_#utils#Feedkeys(a:expr .. s:hijack_probe .. s:hijack_esc, 'itx!', 'silent')
+        call _op_#utils#Feedkeys(a:expr .. s:hijack_probe .. s:hijack_esc, 'itx!')
     catch /op#abort/
         throw 'op#abort'
     catch

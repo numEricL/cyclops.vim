@@ -24,7 +24,6 @@ endif
 call extend(g:cyclops_map_defaults, {
             \ 'accepts_count'      : 1,
             \ 'accepts_register'   : 1,
-            \ 'silent'             : 1,
             \ 'persistent_count'   : 0,
             \ 'absolute_direction' : 0,
             \ }, 'keep')
