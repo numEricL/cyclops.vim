@@ -260,7 +260,7 @@ function s:HijackUserInput(handle, input_stream) abort
             while s:hijack['hmode'] =~# '\v^(i|i-l)$'
                 " unexpectedly, col('.') inside hijack-probe does not reflect actual cursor pos after inserting a char at beginning of line with feedkeys
                 let l:insert = (getpos("']'")[2] == 1)? 'i' : 'a'
-                let l:char = s:HijackUserChar(a:handle, '')
+                let l:char = s:HijackUserChar(a:handle, 'i', '')
                 call s:Log('HijackUserInput (i loop)', s:PModes(2), 'FEED_x!: ' .. l:insert .. l:char .. s:hijack_probe .. s:hijack_esc)
                 call _op_#utils#Feedkeys(l:insert, 'n')
                 call _op_#utils#Feedkeys(l:char .. s:hijack_probe .. s:hijack_esc, 'x!')
@@ -268,8 +268,9 @@ function s:HijackUserInput(handle, input_stream) abort
             endwhile
             call _op_#utils#RestoreState(a:handle['state'])
             call s:ProbeExpr(l:op .. l:expr .. l:input_stream, 'hijack')
-        else
-            let l:char = s:HijackUserChar(a:handle, l:input_stream)
+        else 
+            let l:mode = s:HModeToMapMode(s:hijack['hmode'])
+            let l:char = s:HijackUserChar(a:handle, l:mode, l:input_stream)
             let l:input_stream = s:ProcessStream(l:input_stream, l:char)
             if s:hijack['hmode'] =~# s:fFtT_op_pending_pattern
                 call s:Log('HijackUserInput (no-l break)', '', "feedkeys('dfa×') workaround")
@@ -346,7 +347,6 @@ execute 'tnoremap  <expr>' .. s:hijack_probe .. ' <sid>HijackProbeMap()'
 
 function s:HijackProbeMap() abort
     let s:hijack = { 'hmode': mode(1), 'cmd': getcmdline(), 'cmd_type': getcmdtype() }
-    call s:Log('HijackProbeMap', '', 'hmode=' .. s:hijack['hmode'] .. ' cmd_type=' .. s:hijack['cmd_type'] .. ' cmd=' .. s:hijack['cmd'] .. ' pumvisible=' .. (pumvisible() ? '1' : '0'))
     return ''
 endfunction
 
@@ -406,17 +406,16 @@ function s:ParentCallUpdate(handle) abort
     let l:parent_handle['expr']['reduced_so_far'] ..= l:expr
 endfunction
 
-function s:HijackUserChar(handle, display_stream) abort
+function s:HijackUserChar(handle, mode, display_stream) abort
     let l:empty_init_typeahead = empty(s:initial_typeahead)
-    let l:mode = s:HModeToMapMode(s:hijack['hmode'])
     let l:match_ids = []
     " extra typeahead may be available if user typed fast
     if !getchar(1) && l:empty_init_typeahead
-        let l:match_ids = s:SetDisplayElements(a:handle, l:mode, a:display_stream)
+        let l:match_ids = s:SetDisplayElements(a:handle, a:mode, a:display_stream)
     endif
 
     try
-        let l:char = s:GetCharStr(l:mode)
+        let l:char = s:GetCharStr(a:mode)
     finally
         call s:ClearHighlights(l:match_ids)
     endtry
@@ -529,7 +528,7 @@ function s:GetCharStr(mode) abort
         endif
     endtry
 
-    if a:mode !=# 'i' && l:char ==# "\<esc>"
+    if a:mode[0] !=# 'i' && l:char ==# "\<esc>"
         call _op_#op#Throw('interrupt (<esc>)')
     endif
 
