@@ -33,11 +33,11 @@ let s:inputs = { 'list': [], 'id': 0 }
 let s:operand = { 'expr': '', 'input': '' }
 let s:probe_exception = { 'status': v:false, 'expr': '', 'exception': '' }
 let s:macro_content = ''
-let s:input_source_override = v:false
 let s:insert_mode_callback = v:false
 let s:insert_char = ''
 let s:insert_input_stream = ''
 let s:last_insert = ''
+let s:insert_mode_callback_typeahead = ''
 
 let s:handles = { 'op': {}, 'dot': {}, 'pair': {} }
 
@@ -60,7 +60,6 @@ function s:InitScriptVars()
     call extend(s:probe_exception, { 'status': v:false, 'expr': '', 'exception': '' } )
     call _op_#utils#QueueReset(s:inputs)
     let s:insert_mode_callback = v:false
-    let s:input_source_override = v:false
 endfunction
 
 function _op_#op#StackInit() abort
@@ -95,20 +94,22 @@ endfunction
 
 function _op_#op#ComputeMapCallback() abort range
     let l:handle = _op_#stack#Top()
+    call _op_#utils#RestoreVisual_COMPAT(l:handle)
+    call s:Log('ComputeMapCallback', s:PModes(2), 'expr=' .. l:handle['expr']['orig'] .. ' typeahead=' .. s:ReadTypeaheadTruncated())
 
-    if s:insert_mode_callback
-        let s:insert_mode_callback = v:false
-        call _op_#utils#RestoreState(l:handle['state'])
-    else
-        call _op_#utils#RestoreVisual_COMPAT(l:handle)
+    if !s:insert_mode_callback
         let l:handle['state'] = _op_#utils#GetState()
-        call s:Log('ComputeMapCallback', s:PModes(2), 'expr=' .. l:handle['expr']['orig'] .. ' typeahead=' .. s:ReadTypeaheadTruncated())
     endif
 
     if _op_#stack#Depth() == 1
         try
-            call s:SaveInitialTypeahead()
-            call s:MacroStop(l:handle)
+            if !s:insert_mode_callback
+                call s:SaveInitialTypeahead()
+                call s:MacroStop(l:handle)
+            else
+                call _op_#utils#RestoreState(l:handle['state'])
+                let s:insert_mode_callback_typeahead = s:StealTypeaheadTruncated()
+            endif
             call s:ComputeMapOnStack(l:handle)
         catch /op#abort/
             echohl ErrorMsg | echomsg _op_#stack#GetException() | echohl None
@@ -133,8 +134,8 @@ function _op_#op#ComputeMapCallback() abort range
             call s:Log('EXIT', s:PModes(0), 'FEED_tx!=' .. l:expr_with_modifiers .. s:initial_typeahead)
             call _op_#utils#Feedkeys(l:expr_with_modifiers, 'tx!')
         endif
-        call _op_#utils#Feedkeys(s:initial_typeahead, '')
         call s:MacroResume(l:handle)
+        call _op_#utils#Feedkeys(s:initial_typeahead, 't')
         call _op_#stack#Pop(0, 'StackInit')
     endif
     return 'op#success'
@@ -192,7 +193,7 @@ function s:HijackInput(handle) abort
     let l:op = a:handle['expr']['op']
     let l:expr = a:handle['expr']['reduced']
 
-    if s:input_source_override && empty(s:initial_typeahead)
+    if s:insert_mode_callback && empty(s:initial_typeahead)
         if !_op_#utils#QueueFinished(s:inputs)
             let l:input_stream = _op_#utils#QueueNext(s:inputs)
             call s:Log('HijackInput', 'queue', 'stack cached input=' .. l:input_stream)
@@ -201,8 +202,9 @@ function s:HijackInput(handle) abort
             return l:input_stream
         else
             call s:Log('HijackInput', 'q done', 'insert_input_stream=' .. s:insert_input_stream)
-            let s:input_source_override = v:false
+            let s:insert_mode_callback = v:false
             let l:input_stream = s:insert_input_stream .. s:last_insert
+            let s:initial_typeahead ..= s:insert_mode_callback_typeahead
             call _op_#utils#RestoreState(a:handle['state'])
             call s:ProbeExpr(l:op .. l:expr .. l:input_stream, 'q done')
             return l:input_stream
@@ -233,7 +235,7 @@ function s:HijackInput(handle) abort
 endfunction
 
 function s:StoreInput(handle, input) abort
-    if !s:input_source_override
+    if !s:insert_mode_callback
         " TODO: this needs to be generalized to allow chained operands
 
         " The operator must wait for the operand to finish before storing its input,
@@ -331,7 +333,6 @@ function s:RestartFromInsertMode() abort
         let l:handle = l:stack[0]
         let l:handle['expr']['reduced'] = l:handle['expr']['orig']
         let l:handle['expr']['reduced_so_far'] = ''
-        let s:input_source_override = v:true
 
         if l:handle['init']['handle_type'] ==# 'op'
             call _op_#op#ComputeMapCallback()

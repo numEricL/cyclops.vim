@@ -120,6 +120,7 @@ function _op_#utils#RestoreVisual_COMPAT(handle) abort
 endfunction
 
 function _op_#utils#Feedkeys(expr, mode) abort
+    " mode 't' is needed during macro recording to ensure keys are recorded
     let [ l:timeout, l:timeoutlen ]   = [ &timeout, &timeoutlen ]   | set timeout timeoutlen=0
     let [ l:ttimeout, l:ttimeoutlen ] = [ &ttimeout, &ttimeoutlen ] | set ttimeout ttimeoutlen=0
     try
