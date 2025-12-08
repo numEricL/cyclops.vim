@@ -107,7 +107,7 @@ function _op_#op#ComputeMapCallback() abort range
                 call s:MacroStop(l:handle)
             else
                 call _op_#utils#RestoreState(l:handle['state'])
-                let s:insert_mode_status['typeahead'] = s:StealTypeaheadTruncated()
+                let s:insert_mode_callback['typeahead'] = s:StealTypeaheadTruncated()
             endif
             call s:ComputeMapOnStack(l:handle)
         catch /op#abort/
@@ -116,7 +116,7 @@ function _op_#op#ComputeMapCallback() abort range
             call s:MacroAbort(l:handle)
             return 'op#abort'
         catch /op#insert_callback/
-            call _op_#utils#Feedkeys(s:insert_mode_status['char'], 'n')
+            call _op_#utils#Feedkeys(s:insert_mode_callback['char'], 'n')
             return 'op#insert_callback'
         endtry
     else
@@ -200,10 +200,10 @@ function s:HijackInput(handle) abort
             call s:ProbeExpr(l:op .. l:expr .. l:input_stream, 'stack cache')
             return l:input_stream
         else
-            call s:Log('HijackInput', 'q done', 'insert_input_stream=' .. s:insert_mode_status['input_stream'])
+            call s:Log('HijackInput', 'q done', 'insert_input_stream=' .. s:insert_mode_callback['input_stream'])
             let s:insert_mode_callback['status'] = v:false
-            let l:input_stream = s:insert_mode_status['input_stream'] .. s:insert_mode_status['last_insert']
-            let s:initial_typeahead ..= s:insert_mode_status['typeahead']
+            let l:input_stream = s:insert_mode_callback['input_stream'] .. s:insert_mode_callback['last_insert']
+            let s:initial_typeahead ..= s:insert_mode_callback['typeahead']
             call _op_#utils#RestoreState(a:handle['state'])
             call s:ProbeExpr(l:op .. l:expr .. l:input_stream, 'q done')
             return l:input_stream
@@ -293,8 +293,8 @@ function s:HijackUserInput(handle, input_stream) abort
                 call s:ProbeExpr(l:op .. l:expr .. l:input_stream, 'hijack')
             else
                 let s:insert_mode_callback['status'] = v:true
-                let s:insert_mode_status['char'] = (getpos("']'")[2] == 1)? 'i' : 'a'
-                let s:insert_mode_status['input_stream'] = l:input_stream
+                let s:insert_mode_callback['char'] = (getpos("']'")[2] == 1)? 'i' : 'a'
+                let s:insert_mode_callback['input_stream'] = l:input_stream
                 call s:Log('HijackUserInput', 'insert', 'begin insert mode callback')
                 augroup _op_#op#InsertMode
                     autocmd!
@@ -322,8 +322,8 @@ endfunction
 function s:RestartFromInsertMode() abort
     autocmd! _op_#op#InsertMode
     if s:insert_mode_callback['status']
-        let s:insert_mode_status['last_insert'] = getreg('.') .. "\<esc>"
-        call s:Log('RestartFromInsertMode', '', 'last_insert=' .. s:insert_mode_status['last_insert'])
+        let s:insert_mode_callback['last_insert'] = getreg('.') .. "\<esc>"
+        call s:Log('RestartFromInsertMode', '', 'last_insert=' .. s:insert_mode_callback['last_insert'])
 
         let l:stack = _op_#stack#GetStack()
         if len(l:stack) > 1
