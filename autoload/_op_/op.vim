@@ -23,17 +23,21 @@ let s:hijack_esc = repeat("\<esc>", 3)
 let s:operator_hmode_pattern = '\v^(no[vV]?|consumed|i|c|[nv]-l)(-l)?$'
 let s:operator_end_pattern = '\v^(n|[vV])$'
 
-
 " Problem: feedkeys('dfa×') ends in (lang) operator pending mode
 " Workaround: break out of hijack loop early if detected
 let s:fFtT_op_pending_pattern = '\v^(no[vV]?-l)$'
 
 let s:hijack = {'hmode': '', 'cmd': '', 'cmd_type': ''}
 let s:initial_typeahead = ''
-let s:inputs = []
+let s:inputs = { 'list': [], 'id': 0 }
 let s:operand = { 'expr': '', 'input': '' }
 let s:probe_exception = { 'status': v:false, 'expr': '', 'exception': '' }
 let s:macro_content = ''
+let s:input_source_override = v:false
+let s:insert_mode_callback = v:false
+let s:insert_char = ''
+let s:insert_input_stream = ''
+let s:last_insert = ''
 
 let s:handles = { 'op': {}, 'dot': {}, 'pair': {} }
 
@@ -54,9 +58,9 @@ function s:InitScriptVars()
     call extend(s:operand, { 'expr': '', 'input': '' } )
     call extend(s:hijack, { 'hmode': '', 'cmd': '', 'cmd_type': '' } ) " init early for s:Log
     call extend(s:probe_exception, { 'status': v:false, 'expr': '', 'exception': '' } )
-    if !empty(s:inputs)
-        call remove(s:inputs, 0, -1)
-    endif
+    call _op_#utils#QueueReset(s:inputs)
+    let s:insert_mode_callback = v:false
+    let s:input_source_override = v:false
 endfunction
 
 function _op_#op#StackInit() abort
@@ -91,9 +95,15 @@ endfunction
 
 function _op_#op#ComputeMapCallback() abort range
     let l:handle = _op_#stack#Top()
-    call _op_#utils#RestoreVisual_COMPAT(l:handle)
-    let l:handle['state'] = _op_#utils#GetState()
-    call s:Log('ComputeMapCallback', s:PModes(2), 'expr=' .. l:handle['expr']['orig'] .. ' typeahead=' .. s:ReadTypeaheadTruncated())
+
+    if s:insert_mode_callback
+        let s:insert_mode_callback = v:false
+        call _op_#utils#RestoreState(l:handle['state'])
+    else
+        call _op_#utils#RestoreVisual_COMPAT(l:handle)
+        let l:handle['state'] = _op_#utils#GetState()
+        call s:Log('ComputeMapCallback', s:PModes(2), 'expr=' .. l:handle['expr']['orig'] .. ' typeahead=' .. s:ReadTypeaheadTruncated())
+    endif
 
     if _op_#stack#Depth() == 1
         try
@@ -104,7 +114,10 @@ function _op_#op#ComputeMapCallback() abort range
             echohl ErrorMsg | echomsg _op_#stack#GetException() | echohl None
             call _op_#utils#RestoreState(l:handle['state'])
             call s:MacroAbort(l:handle)
-            return
+            return 'op#abort'
+        catch /op#insert_callback/
+            call _op_#utils#Feedkeys(s:insert_char, 'n')
+            return 'op#insert_callback'
         endtry
     else
         call s:ComputeMapOnStack(l:handle)
@@ -124,29 +137,7 @@ function _op_#op#ComputeMapCallback() abort range
         call s:MacroResume(l:handle)
         call _op_#stack#Pop(0, 'StackInit')
     endif
-endfunction
-
-function s:MacroStop(handle) abort
-    if !empty(a:handle['init']['reg_recording'])
-        execute 'normal! q'
-        let s:macro_content = getreg(a:handle['init']['reg_recording'])
-        let s:macro_content = substitute(s:macro_content, '\V' .. escape(s:initial_typeahead, '\') .. '\$', '', '')
-        call s:Log('MacroStop', '', 'macro_content=' .. s:macro_content)
-    endif
-endfunction
-
-function s:MacroResume(handle) abort
-    if !empty(a:handle['init']['reg_recording'])
-        call setreg(tolower(a:handle['init']['reg_recording']), s:macro_content .. join(s:inputs, ''))
-        execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
-    endif
-endfunction
-
-function s:MacroAbort(handle) abort
-    if !empty(a:handle['init']['reg_recording'])
-        call setreg(tolower(a:handle['init']['reg_recording']), s:macro_content)
-        execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
-    endif
+    return 'op#success'
 endfunction
 
 function s:ComputeMapOnStack(handle) abort
@@ -159,7 +150,7 @@ function s:ComputeMapOnStack(handle) abort
         call s:ProbeExpr(a:handle['expr']['op'] .. a:handle['expr']['orig'], 'expr_orig')
         let l:input = s:HijackInput(a:handle)
         call s:CheckForProbeErrors()
-        let a:handle['expr']['reduced'] ..= l:input
+        call s:StoreInput(a:handle, l:input)
     else
         call s:ParentCallInit(a:handle)
         call inputsave()
@@ -168,7 +159,7 @@ function s:ComputeMapOnStack(handle) abort
         call s:ProbeExpr(a:handle['expr']['op'] .. a:handle['expr']['orig'], 'expr_orig')
         let l:input = s:HijackInput(a:handle)
         call s:CheckForProbeErrors()
-        let a:handle['expr']['reduced'] ..= l:input
+        call s:StoreInput(a:handle, l:input)
         call s:ParentCallUpdate(a:handle)
 
         call _op_#utils#RestoreState(a:handle['state'])
@@ -179,6 +170,9 @@ function s:ComputeMapOnStack(handle) abort
 endfunction
 
 function s:SaveInitialTypeahead() abort
+    if !empty(s:initial_typeahead)
+        return
+    endif
     let s:initial_typeahead = s:StealTypeaheadTruncated()
     if !empty(s:initial_typeahead)
         call s:Log('SaveInitialTypeahead', '', 'initial_typeahead=' .. s:initial_typeahead)
@@ -186,7 +180,7 @@ function s:SaveInitialTypeahead() abort
 endfunction
 
 function s:HijackInput(handle) abort
-    call s:Log('HijackInput ', s:PModes(2))
+    call s:Log('HijackInput ', s:PModes(2), 'initial_typeahead=' .. s:initial_typeahead)
     if s:hijack['hmode'] =~# s:operator_end_pattern
         call s:Log('HijackInput EXIT', '', 'non-operator mode detected: mode=' .. s:hijack['hmode'])
         return ''
@@ -198,8 +192,23 @@ function s:HijackInput(handle) abort
     let l:op = a:handle['expr']['op']
     let l:expr = a:handle['expr']['reduced']
 
-    if a:handle['init']['input_source'] ==# 'cache'
-        let l:input_stream = remove(a:handle['expr']['inputs'], 0)
+    if s:input_source_override && empty(s:initial_typeahead)
+        if !_op_#utils#QueueFinished(s:inputs)
+            let l:input_stream = _op_#utils#QueueNext(s:inputs)
+            call s:Log('HijackInput', 'queue', 'stack cached input=' .. l:input_stream)
+            call _op_#utils#RestoreState(a:handle['state'])
+            call s:ProbeExpr(l:op .. l:expr .. l:input_stream, 'stack cache')
+            return l:input_stream
+        else
+            call s:Log('HijackInput', 'q done', 'insert_input_stream=' .. s:insert_input_stream)
+            let s:input_source_override = v:false
+            let l:input_stream = s:insert_input_stream .. s:last_insert
+            call _op_#utils#RestoreState(a:handle['state'])
+            call s:ProbeExpr(l:op .. l:expr .. l:input_stream, 'q done')
+            return l:input_stream
+        endif
+    elseif a:handle['init']['input_source'] ==# 'cache'
+        let l:input_stream = _op_#utils#QueueNext(a:handle['expr']['inputs'])
         call s:Log('HijackInput', '', 'cached input=' .. l:input_stream)
         call _op_#utils#RestoreState(a:handle['state'])
         call s:ProbeExpr(l:op .. l:expr .. l:input_stream, 'cache')
@@ -220,22 +229,37 @@ function s:HijackInput(handle) abort
     "     endif
     " endif
 
-    " TODO: this needs to be generalized to allow chained operands
-    if a:handle['init']['op_type'] ==# 'operand'
-        call s:Log('HijackInput', 'store', 'operand=' .. a:handle['expr']['reduced'] .. l:input_stream)
-        let s:operand = { 'expr': a:handle['expr']['reduced'], 'input': l:input_stream }
-    else
-        if !empty(s:operand['expr'])
-            call add(s:inputs, s:operand['expr'])
-            call add(s:inputs, s:operand['input'])
-            let l:input_stream = ''
+    return l:input_stream
+endfunction
+
+function s:StoreInput(handle, input) abort
+    if !s:input_source_override
+        " TODO: this needs to be generalized to allow chained operands
+
+        " The operator must wait for the operand to finish before storing its input,
+        " to ensure the correct order of inputs we delay storing the operand's
+        " input. First store the operand's input in s:operand, then let the operator
+        " store both inputs in the correct order.
+        if a:handle['init']['op_type'] ==# 'operand'
+            call s:Log('HijackInput', 'store', 'operand=' .. a:handle['expr']['reduced'] .. a:input)
+            let s:operand = { 'expr': a:handle['expr']['reduced'], 'input': a:input }
         else
-            call s:Log('HijackInput', 'store', l:input_stream)
-            call add(s:inputs, l:input_stream)
+            if !empty(s:operand['expr'])
+                call _op_#utils#QueuePush(s:inputs, s:operand['expr'])
+                call _op_#utils#QueuePush(s:inputs, s:operand['input'])
+            else
+                call _op_#utils#QueuePush(s:inputs, a:input)
+            endif
         endif
     endif
 
-    return l:input_stream
+    if a:handle['init']['op_type'] ==# 'operator' && !empty(s:operand['expr'])
+        " the ParentCallUpdate has already updated with the reduced operand
+        let l:input = ''
+    else
+        let l:input = a:input
+    endif
+    let a:handle['expr']['reduced'] ..= l:input
 endfunction
 
 function s:HijackUserInput(handle, input_stream) abort
@@ -257,19 +281,29 @@ function s:HijackUserInput(handle, input_stream) abort
             call setreg('i', l:reg)
             call s:ProbeExpr('', 'hijack input()')
         elseif s:hijack['hmode'] =~# '\v^(i|i-l)$'
-            while s:hijack['hmode'] =~# '\v^(i|i-l)$'
-                " unexpectedly, col('.') inside hijack-probe does not reflect actual cursor pos after inserting a char at beginning of line with feedkeys
-                let l:insert = (getpos("']'")[2] == 1)? 'i' : 'a'
-                let l:char = s:HijackUserChar(a:handle, '')
-                call s:Log('HijackUserInput (i loop)', s:PModes(2), 'FEED_x!: ' .. l:insert .. l:char .. s:hijack_probe .. s:hijack_esc)
-                call _op_#utils#Feedkeys(l:insert, 'n')
-                call _op_#utils#Feedkeys(l:char .. s:hijack_probe .. s:hijack_esc, 'x!')
+            if !empty(s:initial_typeahead)
+                let l:char = s:GetCharStr('i')
                 let l:input_stream ..= l:char
-            endwhile
-            call _op_#utils#RestoreState(a:handle['state'])
-            call s:ProbeExpr(l:op .. l:expr .. l:input_stream, 'hijack')
+                while !empty(s:initial_typeahead) && l:char !=# "\<esc>"
+                    let l:char = s:GetCharStr('i')
+                    let l:input_stream ..= l:char
+                endwhile
+                call _op_#utils#RestoreState(a:handle['state'])
+                call s:ProbeExpr(l:op .. l:expr .. l:input_stream, 'hijack')
+            else
+                let s:insert_mode_callback = v:true
+                let s:insert_char = (getpos("']'")[2] == 1)? 'i' : 'a'
+                let s:insert_input_stream = l:input_stream
+                call s:Log('HijackUserInput', 'insert', 'begin insert mode callback')
+                augroup _op_#op#InsertMode
+                    autocmd!
+                    autocmd InsertLeave * call s:RestartFromInsertMode()
+                augroup END
+                throw 'op#insert_callback'
+            endif
         else
-            let l:char = s:HijackUserChar(a:handle, l:input_stream)
+            let l:mode = s:HModeToMapMode(s:hijack['hmode'])
+            let l:char = s:HijackUserChar(a:handle, l:mode, l:input_stream)
             let l:input_stream = s:ProcessStream(l:input_stream, l:char)
             if s:hijack['hmode'] =~# s:fFtT_op_pending_pattern
                 call s:Log('HijackUserInput (no-l break)', '', "feedkeys('dfa×') workaround")
@@ -282,6 +316,33 @@ function s:HijackUserInput(handle, input_stream) abort
     unsilent echo
     redraw
     return l:input_stream
+endfunction
+
+function s:RestartFromInsertMode() abort
+    autocmd! _op_#op#InsertMode
+    if s:insert_mode_callback
+        let s:last_insert = getreg('.') .. "\<esc>"
+        call s:Log('RestartFromInsertMode', '', 'last_insert=' .. s:last_insert)
+
+        let l:stack = _op_#stack#GetStack()
+        if len(l:stack) > 1
+            call remove(l:stack, 1, -1) " clear all but base of stack
+        endif
+        let l:handle = l:stack[0]
+        let l:handle['expr']['reduced'] = l:handle['expr']['orig']
+        let l:handle['expr']['reduced_so_far'] = ''
+        let s:input_source_override = v:true
+
+        if l:handle['init']['handle_type'] ==# 'op'
+            call _op_#op#ComputeMapCallback()
+        elseif l:handle['init']['handle_type'] ==# 'dot'
+            call _op_#dot#ComputeMapCallback()
+        elseif l:handle['init']['handle_type'] ==# 'pair'
+            call _op_#pair#ComputeMapCallback()
+        else
+            call _op_#op#Throw('Unsupported handle type in RestartFromInsertMode: ' .. string(l:handle['init']['handle_type']))
+        endif
+    endif
 endfunction
 
 function s:CheckForProbeErrors() abort
@@ -320,6 +381,8 @@ function s:ProbeExpr(expr, type) abort
         call _op_#utils#Feedkeys(a:expr .. s:hijack_probe .. s:hijack_esc, 'itx!')
     catch /op#abort/
         throw 'op#abort'
+    catch /op#insert_callback/
+        throw v:exception
     catch
         call extend(s:probe_exception, {
                     \ 'status': v:true,
@@ -346,7 +409,6 @@ execute 'tnoremap  <expr>' .. s:hijack_probe .. ' <sid>HijackProbeMap()'
 
 function s:HijackProbeMap() abort
     let s:hijack = { 'hmode': mode(1), 'cmd': getcmdline(), 'cmd_type': getcmdtype() }
-    call s:Log('HijackProbeMap', '', 'hmode=' .. s:hijack['hmode'] .. ' cmd_type=' .. s:hijack['cmd_type'] .. ' cmd=' .. s:hijack['cmd'] .. ' pumvisible=' .. (pumvisible() ? '1' : '0'))
     return ''
 endfunction
 
@@ -406,17 +468,16 @@ function s:ParentCallUpdate(handle) abort
     let l:parent_handle['expr']['reduced_so_far'] ..= l:expr
 endfunction
 
-function s:HijackUserChar(handle, display_stream) abort
+function s:HijackUserChar(handle, mode, display_stream) abort
     let l:empty_init_typeahead = empty(s:initial_typeahead)
-    let l:mode = s:HModeToMapMode(s:hijack['hmode'])
     let l:match_ids = []
     " extra typeahead may be available if user typed fast
     if !getchar(1) && l:empty_init_typeahead
-        let l:match_ids = s:SetDisplayElements(a:handle, l:mode, a:display_stream)
+        let l:match_ids = s:SetDisplayElements(a:handle, a:mode, a:display_stream)
     endif
 
     try
-        let l:char = s:GetCharStr(l:mode)
+        let l:char = s:GetCharStr(a:mode)
     finally
         call s:ClearHighlights(l:match_ids)
     endtry
@@ -431,14 +492,14 @@ endfunction
 
 function s:SetDisplayElements(handle, mode, display_stream) abort
     let l:match_ids = []
-    if a:mode ==# 'i'
-        let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
-        " workaround for col('.') not updating correctly when inserting at beginning of line
-        let l:cur_offset = (getpos("']'")[2] == 1)? 0 : 1
-        call add(l:match_ids, matchadd(l:cursor_hl, '\%' .. line('.') .. 'l\%' .. (col('.') + l:cur_offset) .. 'c'))
-        redraw
-        unsilent echo '--INSERT-- (cyclops.vim)'
-    elseif a:mode ==# 'o'
+    " if a:mode ==# 'i'
+    "     let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
+    "     " workaround for col('.') not updating correctly when inserting at beginning of line
+    "     let l:cur_offset = (getpos("']'")[2] == 1)? 0 : 1
+    "     call add(l:match_ids, matchadd(l:cursor_hl, '\%' .. line('.') .. 'l\%' .. (col('.') + l:cur_offset) .. 'c'))
+    "     redraw
+    "     unsilent echo '--INSERT-- (cyclops.vim)'
+    if a:mode ==# 'o'
         call _op_#utils#RestoreState(a:handle['state'])
         let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
         if a:handle['init']['mode'] =~# '\v^[vV]$'
@@ -529,7 +590,7 @@ function s:GetCharStr(mode) abort
         endif
     endtry
 
-    if a:mode !=# 'i' && l:char ==# "\<esc>"
+    if a:mode[0] !=# 'i' && l:char ==# "\<esc>"
         call _op_#op#Throw('interrupt (<esc>)')
     endif
 
@@ -599,10 +660,12 @@ function s:StoreHandle(handle) abort
     call s:Log('StoreHandle ' .. a:handle['init']['handle_type'], '', 'expr=' .. a:handle['expr']['reduced'])
     let l:handle_to_store = deepcopy(a:handle)
 
-    if a:handle['init']['op_type'] ==# 'operand'
-        call extend(l:handle_to_store['expr'], { 'inputs': [s:operand['input']] })
-    else
-        call extend(l:handle_to_store['expr'], { 'inputs': deepcopy(s:inputs) })
+    if a:handle['init']['input_source'] ==# 'user'
+        if a:handle['init']['op_type'] ==# 'operand'
+            call extend(l:handle_to_store['expr'], { 'inputs': { 'list': [s:operand['input']], 'id': 0} })
+        else
+            call extend(l:handle_to_store['expr'], { 'inputs': deepcopy(s:inputs) })
+        endif
     endif
     call remove(l:handle_to_store, 'stack')
 
@@ -613,8 +676,8 @@ endfunction
 function s:ModifiersNeeded(handle) abort
     " HijackInput always ends with the probe that returns to normal mode, so we
     " must correct it here.
-    " This is not necessary if know the probe will not be consumed, so further
-    " optimization is possible.
+    " This is not necessary if we know the probe will not be consumed, so
+    " further optimization is possible.
     if s:hijack['hmode']  !=# 'n'
         return v:true
     endif
@@ -671,6 +734,29 @@ endfunction
 
 function _op_#op#GetProbe() abort
     return s:hijack_probe .. s:hijack_esc
+endfunction
+
+function s:MacroStop(handle) abort
+    if !empty(reg_recording()) && !empty(a:handle['init']['reg_recording'])
+        execute 'normal! q'
+        let s:macro_content = getreg(a:handle['init']['reg_recording'])
+        let s:macro_content = substitute(s:macro_content, '\V' .. escape(s:initial_typeahead, '\') .. '\$', '', '')
+        call s:Log('MacroStop', '', 'macro_content=' .. s:macro_content)
+    endif
+endfunction
+
+function s:MacroResume(handle) abort
+    if !empty(a:handle['init']['reg_recording'])
+        call setreg(tolower(a:handle['init']['reg_recording']), s:macro_content .. join(s:inputs['list'], ''))
+        execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
+    endif
+endfunction
+
+function s:MacroAbort(handle) abort
+    if !empty(a:handle['init']['reg_recording'])
+        call setreg(tolower(a:handle['init']['reg_recording']), s:macro_content)
+        execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
+    endif
 endfunction
 
 function s:GetCharStr_COMPAT(...) abort

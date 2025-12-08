@@ -16,7 +16,10 @@ function _op_#pair#Initcallback(handle, pair, dir) abort
 endfunction
 
 function _op_#pair#ComputeMapCallback() abort
-    call _op_#op#ComputeMapCallback()
+    let l:result = _op_#op#ComputeMapCallback()
+    if l:result ==# 'op#insert_callback'
+        return
+    endif
     let l:handle = _op_#op#GetStoredHandle('pair')
     let l:id = l:handle['pair']['id']
     let l:handle['pair']['reduced'][l:id] = l:handle['expr']['reduced']
@@ -39,7 +42,7 @@ function _op_#pair#PairRepeatMap(dir) abort
         let l:stack_handle = _op_#op#StackInit()
         call _op_#op#InitCallback(l:stack_handle, 'pair', l:stored_handle['pair']['orig'][l:id], l:stored_handle['opts'])
         let l:stack_handle['init']['input_source'] = 'cache'
-        let l:stack_handle['expr']['inputs'] = deepcopy(l:stored_handle['expr']['inputs'])
+        let l:stack_handle['expr']['inputs'] = l:stored_handle['expr']['inputs']
         let l:stack_handle['pair'] = l:stored_handle['pair']
         let l:stack_handle['pair']['id'] = l:id
         let l:stack_handle['repeat'] = l:stored_handle['repeat']

@@ -22,11 +22,15 @@ function _op_#dot#InitCallback(handle) abort
 endfunction
 
 function _op_#dot#ComputeMapCallback() abort
-    call _op_#op#ComputeMapCallback()
+    let l:result = _op_#op#ComputeMapCallback()
+    if l:result ==# 'op#insert_callback'
+        return
+    endif
     if exists("g:loaded_repeat")
         silent! call repeat#invalidate() " disable vim-repeat if present
     endif
     if empty(_op_#stack#GetException())
+        call s:Log('dot#ComputeMapCallback', 'g@', 'initiating dot repeat')
         let l:handle = _op_#op#GetStoredHandle('dot')
         let l:handle['dot']['exit_mode'] = mode(1)
         let l:motion = (mode(0) ==# 'n')? 'l' : ''
