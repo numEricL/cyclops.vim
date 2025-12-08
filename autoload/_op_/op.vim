@@ -18,10 +18,6 @@ silent! call _op_#init#settings#Load()
 let s:hijack_probe = g:cyclops_probe_char
 let s:hijack_esc = repeat("\<esc>", 3)
 
-let s:insert_mode_callback = v:false
-let s:input_source_override = v:false
-
-
 " n-l no-l catches f, F, t, T in lang mode (e.g. fa and dfa)
 " this pattern matches also n-l-l and v-l-l, but these modes are not possible and this pattern is simpler
 let s:operator_hmode_pattern = '\v^(no[vV]?|consumed|i|c|[nv]-l)(-l)?$'
@@ -37,6 +33,10 @@ let s:inputs = { 'list': [], 'id': 0 }
 let s:operand = { 'expr': '', 'input': '' }
 let s:probe_exception = { 'status': v:false, 'expr': '', 'exception': '' }
 let s:macro_content = ''
+let s:input_source_override = v:false
+let s:insert_mode_callback = v:false
+let s:insert_char = ''
+let s:insert_input_stream = ''
 
 let s:handles = { 'op': {}, 'dot': {}, 'pair': {} }
 
@@ -139,29 +139,6 @@ function _op_#op#ComputeMapCallback() abort range
     return 'op#success'
 endfunction
 
-function s:MacroStop(handle) abort
-    if !empty(reg_recording()) && !empty(a:handle['init']['reg_recording'])
-        execute 'normal! q'
-        let s:macro_content = getreg(a:handle['init']['reg_recording'])
-        let s:macro_content = substitute(s:macro_content, '\V' .. escape(s:initial_typeahead, '\') .. '\$', '', '')
-        call s:Log('MacroStop', '', 'macro_content=' .. s:macro_content)
-    endif
-endfunction
-
-function s:MacroResume(handle) abort
-    if !empty(a:handle['init']['reg_recording'])
-        call setreg(tolower(a:handle['init']['reg_recording']), s:macro_content .. join(s:inputs['list'], ''))
-        execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
-    endif
-endfunction
-
-function s:MacroAbort(handle) abort
-    if !empty(a:handle['init']['reg_recording'])
-        call setreg(tolower(a:handle['init']['reg_recording']), s:macro_content)
-        execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
-    endif
-endfunction
-
 function s:ComputeMapOnStack(handle) abort
     if _op_#stack#Depth() == 1
         " Nested op#map calls results in recursion and is managed by a stack.
@@ -173,7 +150,6 @@ function s:ComputeMapOnStack(handle) abort
         let l:input = s:HijackInput(a:handle)
         call s:CheckForProbeErrors()
         call s:StoreInput(a:handle, l:input)
-        let a:handle['expr']['reduced'] ..= l:input
     else
         call s:ParentCallInit(a:handle)
         call inputsave()
@@ -183,7 +159,6 @@ function s:ComputeMapOnStack(handle) abort
         let l:input = s:HijackInput(a:handle)
         call s:CheckForProbeErrors()
         call s:StoreInput(a:handle, l:input)
-        let a:handle['expr']['reduced'] ..= l:input
         call s:ParentCallUpdate(a:handle)
 
         call _op_#utils#RestoreState(a:handle['state'])
@@ -257,21 +232,33 @@ function s:HijackInput(handle) abort
 endfunction
 
 function s:StoreInput(handle, input) abort
-    " TODO: this needs to be generalized to allow chained operands
-    if s:input_source_override
-        return
-    endif
-    if a:handle['init']['op_type'] ==# 'operand'
-        call s:Log('HijackInput', 'store', 'operand=' .. a:handle['expr']['reduced'] .. a:input)
-        let s:operand = { 'expr': a:handle['expr']['reduced'], 'input': a:input }
-    else
-        if !empty(s:operand['expr'])
-            call _op_#utils#QueuePush(s:inputs, s:operand['expr'])
-            call _op_#utils#QueuePush(s:inputs, s:operand['input'])
+    if !s:input_source_override
+        " TODO: this needs to be generalized to allow chained operands
+
+        " The operator must wait for the operand to finish before storing its input,
+        " to ensure the correct order of inputs we delay storing the operand's
+        " input. First store the operand's input in s:operand, then let the operator
+        " store both inputs in the correct order.
+        if a:handle['init']['op_type'] ==# 'operand'
+            call s:Log('HijackInput', 'store', 'operand=' .. a:handle['expr']['reduced'] .. a:input)
+            let s:operand = { 'expr': a:handle['expr']['reduced'], 'input': a:input }
         else
-            call _op_#utils#QueuePush(s:inputs, a:input)
+            if !empty(s:operand['expr'])
+                call _op_#utils#QueuePush(s:inputs, s:operand['expr'])
+                call _op_#utils#QueuePush(s:inputs, s:operand['input'])
+            else
+                call _op_#utils#QueuePush(s:inputs, a:input)
+            endif
         endif
     endif
+
+    if a:handle['init']['op_type'] ==# 'operator' && !empty(s:operand['expr'])
+        " the ParentCallUpdate has already updated with the reduced operand
+        let l:input = ''
+    else
+        let l:input = a:input
+    endif
+    let a:handle['expr']['reduced'] ..= l:input
 endfunction
 
 function s:HijackUserInput(handle, input_stream) abort
@@ -330,6 +317,33 @@ function s:HijackUserInput(handle, input_stream) abort
     return l:input_stream
 endfunction
 
+function s:RestartFromInsertMode() abort
+    autocmd! _op_#op#InsertMode
+    if s:insert_mode_callback
+        let s:last_insert = getreg('.') .. "\<esc>"
+        call s:Log('RestartFromInsertMode', '', 'last_insert=' .. s:last_insert)
+
+        let l:stack = _op_#stack#GetStack()
+        if len(l:stack) > 1
+            call remove(l:stack, 1, -1) " clear all but base of stack
+        endif
+        let l:handle = l:stack[0]
+        let l:handle['expr']['reduced'] = l:handle['expr']['orig']
+        let l:handle['expr']['reduced_so_far'] = ''
+        let s:input_source_override = v:true
+
+        if l:handle['init']['handle_type'] ==# 'op'
+            call _op_#op#ComputeMapCallback()
+        elseif l:handle['init']['handle_type'] ==# 'dot'
+            call _op_#dot#ComputeMapCallback()
+        elseif l:handle['init']['handle_type'] ==# 'pair'
+            call _op_#pair#ComputeMapCallback()
+        else
+            call _op_#op#Throw('Unsupported handle type in RestartFromInsertMode: ' .. string(l:handle['init']['handle_type']))
+        endif
+    endif
+endfunction
+
 function s:CheckForProbeErrors() abort
     if s:probe_exception['status']
         call _op_#op#Throw('Exception detected while processing ' .. s:probe_exception['expr'] .. ': ' .. s:probe_exception['exception'])
@@ -367,7 +381,7 @@ function s:ProbeExpr(expr, type) abort
     catch /op#abort/
         throw 'op#abort'
     catch /op#insert_callback/
-        throw 'op#insert_callback'
+        throw v:exception
     catch
         call extend(s:probe_exception, {
                     \ 'status': v:true,
@@ -647,7 +661,7 @@ function s:StoreHandle(handle) abort
 
     if a:handle['init']['input_source'] ==# 'user'
         if a:handle['init']['op_type'] ==# 'operand'
-            call extend(l:handle_to_store['expr'], { 'inputs': [s:operand['input']] })
+            call extend(l:handle_to_store['expr'], { 'inputs': { 'list': [s:operand['input']], 'id': 0} })
         else
             call extend(l:handle_to_store['expr'], { 'inputs': deepcopy(s:inputs) })
         endif
@@ -721,6 +735,29 @@ function _op_#op#GetProbe() abort
     return s:hijack_probe .. s:hijack_esc
 endfunction
 
+function s:MacroStop(handle) abort
+    if !empty(reg_recording()) && !empty(a:handle['init']['reg_recording'])
+        execute 'normal! q'
+        let s:macro_content = getreg(a:handle['init']['reg_recording'])
+        let s:macro_content = substitute(s:macro_content, '\V' .. escape(s:initial_typeahead, '\') .. '\$', '', '')
+        call s:Log('MacroStop', '', 'macro_content=' .. s:macro_content)
+    endif
+endfunction
+
+function s:MacroResume(handle) abort
+    if !empty(a:handle['init']['reg_recording'])
+        call setreg(tolower(a:handle['init']['reg_recording']), s:macro_content .. join(s:inputs['list'], ''))
+        execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
+    endif
+endfunction
+
+function s:MacroAbort(handle) abort
+    if !empty(a:handle['init']['reg_recording'])
+        call setreg(tolower(a:handle['init']['reg_recording']), s:macro_content)
+        execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
+    endif
+endfunction
+
 function s:GetCharStr_COMPAT(...) abort
     if has('*getcharstr')
         return a:0? getcharstr(a:1) : getcharstr()
@@ -730,33 +767,6 @@ function s:GetCharStr_COMPAT(...) abort
             let l:char = nr2char(l:char)
         endif
         return l:char
-    endif
-endfunction
-
-function s:RestartFromInsertMode() abort
-    autocmd! _op_#op#InsertMode
-    if s:insert_mode_callback
-        let s:last_insert = getreg('.') .. "\<esc>"
-        call s:Log('RestartFromInsertMode', '', 'last_insert=' .. s:last_insert)
-
-        let l:stack = _op_#stack#GetStack()
-        if len(l:stack) > 1
-            call remove(l:stack, 1, -1) " clear all but base of stack
-        endif
-        let l:handle = l:stack[0]
-        let l:handle['expr']['reduced'] = l:handle['expr']['orig']
-        let l:handle['expr']['reduced_so_far'] = ''
-        let s:input_source_override = v:true
-
-        if l:handle['init']['handle_type'] ==# 'op'
-            call _op_#op#ComputeMapCallback()
-        elseif l:handle['init']['handle_type'] ==# 'dot'
-            call _op_#dot#ComputeMapCallback()
-        elseif l:handle['init']['handle_type'] ==# 'pair'
-            call _op_#pair#ComputeMapCallback()
-        else
-            call _op_#op#Throw('Unsupported handle type in RestartFromInsertMode: ' .. string(l:handle['init']['handle_type']))
-        endif
     endif
 endfunction
 
