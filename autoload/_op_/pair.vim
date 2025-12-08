@@ -16,7 +16,10 @@ function _op_#pair#Initcallback(handle, pair, dir) abort
 endfunction
 
 function _op_#pair#ComputeMapCallback() abort
-    call _op_#op#ComputeMapCallback()
+    let l:result = _op_#op#ComputeMapCallback()
+    if l:result ==# 'op#insert_callback'
+        return
+    endif
     let l:handle = _op_#op#GetStoredHandle('pair')
     let l:id = l:handle['pair']['id']
     let l:handle['pair']['reduced'][l:id] = l:handle['expr']['reduced']
