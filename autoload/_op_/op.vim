@@ -37,6 +37,7 @@ let s:input_source_override = v:false
 let s:insert_mode_callback = v:false
 let s:insert_char = ''
 let s:insert_input_stream = ''
+let s:last_insert = ''
 
 let s:handles = { 'op': {}, 'dot': {}, 'pair': {} }
 
@@ -491,14 +492,14 @@ endfunction
 
 function s:SetDisplayElements(handle, mode, display_stream) abort
     let l:match_ids = []
-    if a:mode ==# 'i'
-        let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
-        " workaround for col('.') not updating correctly when inserting at beginning of line
-        let l:cur_offset = (getpos("']'")[2] == 1)? 0 : 1
-        call add(l:match_ids, matchadd(l:cursor_hl, '\%' .. line('.') .. 'l\%' .. (col('.') + l:cur_offset) .. 'c'))
-        redraw
-        unsilent echo '--INSERT-- (cyclops.vim)'
-    elseif a:mode ==# 'o'
+    " if a:mode ==# 'i'
+    "     let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
+    "     " workaround for col('.') not updating correctly when inserting at beginning of line
+    "     let l:cur_offset = (getpos("']'")[2] == 1)? 0 : 1
+    "     call add(l:match_ids, matchadd(l:cursor_hl, '\%' .. line('.') .. 'l\%' .. (col('.') + l:cur_offset) .. 'c'))
+    "     redraw
+    "     unsilent echo '--INSERT-- (cyclops.vim)'
+    if a:mode ==# 'o'
         call _op_#utils#RestoreState(a:handle['state'])
         let l:cursor_hl = hlexists('Cursor')? 'Cursor' : g:cyclops_cursor_highlight_fallback
         if a:handle['init']['mode'] =~# '\v^[vV]$'
@@ -675,8 +676,8 @@ endfunction
 function s:ModifiersNeeded(handle) abort
     " HijackInput always ends with the probe that returns to normal mode, so we
     " must correct it here.
-    " This is not necessary if know the probe will not be consumed, so further
-    " optimization is possible.
+    " This is not necessary if we know the probe will not be consumed, so
+    " further optimization is possible.
     if s:hijack['hmode']  !=# 'n'
         return v:true
     endif
