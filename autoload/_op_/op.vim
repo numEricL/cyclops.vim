@@ -33,11 +33,7 @@ let s:inputs = { 'list': [], 'id': 0 }
 let s:operand = { 'expr': '', 'input': '' }
 let s:probe_exception = { 'status': v:false, 'expr': '', 'exception': '' }
 let s:macro_content = ''
-let s:insert_mode_callback = v:false
-let s:insert_char = ''
-let s:insert_input_stream = ''
-let s:last_insert = ''
-let s:insert_mode_callback_typeahead = ''
+let s:insert_mode_callback = { 'status': v:false, 'char': '', 'input_stream': '', 'last_insert': '', 'typeahead': '', }
 
 let s:handles = { 'op': {}, 'dot': {}, 'pair': {} }
 
@@ -58,8 +54,8 @@ function s:InitScriptVars()
     call extend(s:operand, { 'expr': '', 'input': '' } )
     call extend(s:hijack, { 'hmode': '', 'cmd': '', 'cmd_type': '' } ) " init early for s:Log
     call extend(s:probe_exception, { 'status': v:false, 'expr': '', 'exception': '' } )
+    call extend(s:insert_mode_callback, { 'status': v:false, 'char': '', 'input_stream': '', 'last_insert': '', 'typeahead': '', } )
     call _op_#utils#QueueReset(s:inputs)
-    let s:insert_mode_callback = v:false
 endfunction
 
 function _op_#op#StackInit() abort
@@ -97,18 +93,21 @@ function _op_#op#ComputeMapCallback() abort range
     call _op_#utils#RestoreVisual_COMPAT(l:handle)
     call s:Log('ComputeMapCallback', s:PModes(2), 'expr=' .. l:handle['expr']['orig'] .. ' typeahead=' .. s:ReadTypeaheadTruncated())
 
-    if !s:insert_mode_callback
+    " if insert mode is reached during input hijacking, cyclops.vim unwinds the
+    " stack and sets up a callback on InsertLeave to rebuild the stack and resume
+    " processing with last change register content and any remaining typeahead.
+    if !s:insert_mode_callback['status']
         let l:handle['state'] = _op_#utils#GetState()
     endif
 
     if _op_#stack#Depth() == 1
         try
-            if !s:insert_mode_callback
+            if !s:insert_mode_callback['status']
                 call s:SaveInitialTypeahead()
                 call s:MacroStop(l:handle)
             else
                 call _op_#utils#RestoreState(l:handle['state'])
-                let s:insert_mode_callback_typeahead = s:StealTypeaheadTruncated()
+                let s:insert_mode_status['typeahead'] = s:StealTypeaheadTruncated()
             endif
             call s:ComputeMapOnStack(l:handle)
         catch /op#abort/
@@ -117,7 +116,7 @@ function _op_#op#ComputeMapCallback() abort range
             call s:MacroAbort(l:handle)
             return 'op#abort'
         catch /op#insert_callback/
-            call _op_#utils#Feedkeys(s:insert_char, 'n')
+            call _op_#utils#Feedkeys(s:insert_mode_status['char'], 'n')
             return 'op#insert_callback'
         endtry
     else
@@ -193,7 +192,7 @@ function s:HijackInput(handle) abort
     let l:op = a:handle['expr']['op']
     let l:expr = a:handle['expr']['reduced']
 
-    if s:insert_mode_callback && empty(s:initial_typeahead)
+    if s:insert_mode_callback['status'] && empty(s:initial_typeahead)
         if !_op_#utils#QueueFinished(s:inputs)
             let l:input_stream = _op_#utils#QueueNext(s:inputs)
             call s:Log('HijackInput', 'queue', 'stack cached input=' .. l:input_stream)
@@ -201,10 +200,10 @@ function s:HijackInput(handle) abort
             call s:ProbeExpr(l:op .. l:expr .. l:input_stream, 'stack cache')
             return l:input_stream
         else
-            call s:Log('HijackInput', 'q done', 'insert_input_stream=' .. s:insert_input_stream)
-            let s:insert_mode_callback = v:false
-            let l:input_stream = s:insert_input_stream .. s:last_insert
-            let s:initial_typeahead ..= s:insert_mode_callback_typeahead
+            call s:Log('HijackInput', 'q done', 'insert_input_stream=' .. s:insert_mode_status['input_stream'])
+            let s:insert_mode_callback['status'] = v:false
+            let l:input_stream = s:insert_mode_status['input_stream'] .. s:insert_mode_status['last_insert']
+            let s:initial_typeahead ..= s:insert_mode_status['typeahead']
             call _op_#utils#RestoreState(a:handle['state'])
             call s:ProbeExpr(l:op .. l:expr .. l:input_stream, 'q done')
             return l:input_stream
@@ -235,7 +234,7 @@ function s:HijackInput(handle) abort
 endfunction
 
 function s:StoreInput(handle, input) abort
-    if !s:insert_mode_callback
+    if !s:insert_mode_callback['status']
         " TODO: this needs to be generalized to allow chained operands
 
         " The operator must wait for the operand to finish before storing its input,
@@ -293,9 +292,9 @@ function s:HijackUserInput(handle, input_stream) abort
                 call _op_#utils#RestoreState(a:handle['state'])
                 call s:ProbeExpr(l:op .. l:expr .. l:input_stream, 'hijack')
             else
-                let s:insert_mode_callback = v:true
-                let s:insert_char = (getpos("']'")[2] == 1)? 'i' : 'a'
-                let s:insert_input_stream = l:input_stream
+                let s:insert_mode_callback['status'] = v:true
+                let s:insert_mode_status['char'] = (getpos("']'")[2] == 1)? 'i' : 'a'
+                let s:insert_mode_status['input_stream'] = l:input_stream
                 call s:Log('HijackUserInput', 'insert', 'begin insert mode callback')
                 augroup _op_#op#InsertMode
                     autocmd!
@@ -322,9 +321,9 @@ endfunction
 
 function s:RestartFromInsertMode() abort
     autocmd! _op_#op#InsertMode
-    if s:insert_mode_callback
-        let s:last_insert = getreg('.') .. "\<esc>"
-        call s:Log('RestartFromInsertMode', '', 'last_insert=' .. s:last_insert)
+    if s:insert_mode_callback['status']
+        let s:insert_mode_status['last_insert'] = getreg('.') .. "\<esc>"
+        call s:Log('RestartFromInsertMode', '', 'last_insert=' .. s:insert_mode_status['last_insert'])
 
         let l:stack = _op_#stack#GetStack()
         if len(l:stack) > 1
