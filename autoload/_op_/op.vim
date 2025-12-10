@@ -32,7 +32,6 @@ let s:initial_typeahead = ''
 let s:inputs = { 'list': [], 'id': 0 }
 let s:operand = { 'expr': '', 'input': '' }
 let s:probe_exception = { 'status': v:false, 'expr': '', 'exception': '' }
-let s:macro_content = ''
 let s:insert_mode_callback = { 'status': v:false, 'char': '', 'input_stream': '', 'last_insert': '', 'typeahead': '', }
 
 let s:handles = { 'op': {}, 'dot': {}, 'pair': {} }
@@ -50,7 +49,6 @@ endfunction
 
 function s:InitScriptVars()
     let s:initial_typeahead = ''
-    let s:macro_content = ''
     call extend(s:operand, { 'expr': '', 'input': '' } )
     call extend(s:hijack, { 'hmode': '', 'cmd': '', 'cmd_type': '' } ) " init early for s:Log
     call extend(s:probe_exception, { 'status': v:false, 'expr': '', 'exception': '' } )
@@ -72,7 +70,11 @@ function _op_#op#InitCallback(handle, handle_type, expr, opts) abort
                 \ 'mode'          : mode(1),
                 \ 'op_type'       : mode(1)[:1] ==# 'no'? 'operand' : 'operator',
                 \ 'input_source'  : 'user',
+                \ } } )
+    call extend(a:handle, {'macro' : {
                 \ 'reg_recording' : reg_recording(),
+                \ 'content'       : '',
+                \ 'append_input'  :v:true,
                 \ } } )
     call extend(a:handle, { 'mods' : {
                 \ 'count'    : v:count,
@@ -91,7 +93,7 @@ endfunction
 function _op_#op#ComputeMapCallback() abort range
     let l:handle = _op_#stack#Top()
     call _op_#utils#RestoreVisual_COMPAT(l:handle)
-    call s:Log('ComputeMapCallback', s:PModes(2), 'expr=' .. l:handle['expr']['orig'] .. ' typeahead=' .. s:ReadTypeaheadTruncated())
+    call s:Log('ComputeMapCallback', s:PModes(2), 'expr=' .. l:handle['expr']['orig'] .. ' typeahead=' .. _op_#op#ReadTypeaheadTruncated())
 
     " if insert mode is reached during input hijacking, cyclops.vim unwinds the
     " stack and sets up a callback on InsertLeave to rebuild the stack and resume
@@ -107,16 +109,17 @@ function _op_#op#ComputeMapCallback() abort range
         try
             if !s:insert_mode_callback['status']
                 call s:SaveInitialTypeahead()
-                call s:MacroStop(l:handle)
+                let l:macro_typeahead = substitute(s:initial_typeahead, '\v' .. "\<esc>" .. '{' .. g:cyclops_max_trunc_esc ..'}$', '', '')
+                let l:handle['macro']['content'] = _op_#utils#MacroStop(l:macro_typeahead)
             else
                 call _op_#utils#RestoreState(l:handle['state'])
-                let s:insert_mode_callback['typeahead'] = s:StealTypeaheadTruncated()
+                let s:insert_mode_callback['typeahead'] = _op_#op#StealTypeaheadTruncated()
             endif
             call s:ComputeMapOnStack(l:handle)
         catch /op#abort/
             echohl ErrorMsg | echomsg _op_#stack#GetException() | echohl None
             call _op_#utils#RestoreState(l:handle['state'])
-            call s:MacroAbort(l:handle)
+            call _op_#utils#MacroResume(l:handle['macro']['reg_recording'], l:handle['macro']['content'])
             return 'op#abort'
         catch /op#insert_callback/
             call _op_#utils#Feedkeys(s:insert_mode_callback['char'], 'n')
@@ -129,15 +132,19 @@ function _op_#op#ComputeMapCallback() abort range
     call s:StoreHandle(l:handle)
 
     if _op_#stack#Depth() == 1
-        call s:Log('ComputeMapCallback EXIT', '', 'initial_typeahead=' .. s:initial_typeahead)
+        let l:typeahead = substitute(s:initial_typeahead, '\v' .. "\<esc>" .. '{' .. g:cyclops_max_trunc_esc ..'}$', '', '')
+        call s:Log('ComputeMapCallback EXIT', '', 'typeahead=' .. l:typeahead)
         if s:ModifiersNeeded(l:handle)
             call _op_#utils#RestoreState(l:handle['state'])
             let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:handle['mods'], l:handle['opts'], l:handle['expr']['op'])
-            call s:Log('EXIT', s:PModes(0), 'FEED_tx=' .. l:expr_with_modifiers .. s:initial_typeahead)
+            call s:Log('EXIT', s:PModes(0), 'FEED_tx=' .. l:expr_with_modifiers .. l:typeahead)
             call _op_#utils#Feedkeys(l:expr_with_modifiers, 'tx')
         endif
-        call s:MacroResume(l:handle)
-        call _op_#utils#Feedkeys(s:initial_typeahead, 't')
+        if l:handle['macro']['append_input']
+            let l:handle['macro']['content'] ..= join(s:inputs['list'], '')
+        endif
+        call _op_#utils#MacroResume(l:handle['macro']['reg_recording'], l:handle['macro']['content'])
+        call _op_#utils#Feedkeys(l:typeahead, 't')
         call _op_#stack#Pop(0, 'StackInit')
     endif
     return 'op#success'
@@ -166,17 +173,18 @@ function s:ComputeMapOnStack(handle) abort
         call s:ParentCallUpdate(a:handle)
 
         call _op_#utils#RestoreState(a:handle['state'])
-        call s:Log('ComputeMapOnStack', 'EXIT', 'FEED_tx=' .. a:handle['expr']['op'] .. a:handle['expr']['reduced'] .. ' typeahead=' .. s:ReadTypeaheadTruncated())
+        call s:Log('ComputeMapOnStack', 'EXIT', 'FEED_tx=' .. a:handle['expr']['op'] .. a:handle['expr']['reduced'] .. ' typeahead=' .. _op_#op#ReadTypeaheadTruncated())
         call _op_#utils#Feedkeys(a:handle['expr']['op'] .. a:handle['expr']['reduced'], 'tx')
         call inputrestore()
     endif
 endfunction
 
 function s:SaveInitialTypeahead() abort
+    " prevent duplication on insert mode callback
     if !empty(s:initial_typeahead)
         return
     endif
-    let s:initial_typeahead = s:StealTypeaheadTruncated()
+    let s:initial_typeahead = _op_#op#StealTypeaheadTruncated()
     if !empty(s:initial_typeahead)
         call s:Log('SaveInitialTypeahead', '', 'initial_typeahead=' .. s:initial_typeahead)
     endif
@@ -365,7 +373,7 @@ function s:ProcessStream(stream, char) abort
 endfunction
 
 function s:ProbeExpr(expr, type) abort
-    let l:msg = 'FEED_tx!=' .. a:expr .. '<PROBE>' .. ' typeahead=' .. s:ReadTypeaheadTruncated()
+    let l:msg = 'FEED_tx!=' .. a:expr .. '<PROBE>' .. ' typeahead=' .. _op_#op#ReadTypeaheadTruncated()
     let l:stack_id = _op_#stack#Push(a:type, l:msg)
 
     " HijackProbMap may be consumed instead of expanded, set default case
@@ -399,7 +407,7 @@ function s:ProbeExpr(expr, type) abort
         let &belloff = l:belloff
         let &iminsert = l:iminsert
     endtry
-    call _op_#stack#Pop(l:stack_id, 'typeahead=' .. s:ReadTypeaheadTruncated())
+    call _op_#stack#Pop(l:stack_id, 'typeahead=' .. _op_#op#ReadTypeaheadTruncated())
 endfunction
 
 " map the first char of s:hijack_probe to get hijack data
@@ -434,7 +442,7 @@ function s:ParentCallInit(handle) abort
     let l:calling_expr = l:parent_handle['expr']['reduced']
 
     " remove remnants of hijack_probe .. hijack_esc placed by HijackInput
-    let l:typeahead = s:ReadTypeaheadTruncated()
+    let l:typeahead = _op_#op#ReadTypeaheadTruncated()
     call s:Log('ParentCallInit', '', 'calling_expr=' .. l:calling_expr .. ' typeahead=' .. l:typeahead)
     let l:typeahead = substitute(l:typeahead, '\V' .. s:hijack_probe .. "\<esc>" .. '\+\$', '', '')
 
@@ -634,17 +642,13 @@ function s:GetCharFromTypeahead(handle) abort
     return l:char
 endfunction
 
-function s:ReadTypeaheadTruncated() abort
-    let l:typeahead = s:StealTypeaheadTruncated()
+function _op_#op#ReadTypeaheadTruncated() abort
+    let l:typeahead = _op_#op#StealTypeaheadTruncated()
     call feedkeys(l:typeahead, 'i')
     return l:typeahead
 endfunction
 
-function _op_#op#ReadTypeaheadTruncated() abort
-    return s:ReadTypeaheadTruncated()
-endfunction
-
-function s:StealTypeaheadTruncated() abort
+function _op_#op#StealTypeaheadTruncated() abort
     let l:typeahead = ''
     let l:count = 0
 
@@ -737,34 +741,6 @@ endfunction
 
 function _op_#op#GetProbe() abort
     return s:hijack_probe .. s:hijack_esc
-endfunction
-
-function s:MacroStop(handle) abort
-    if !empty(reg_recording()) && !empty(a:handle['init']['reg_recording'])
-        execute 'normal! q'
-        let s:macro_content = getreg(a:handle['init']['reg_recording'])
-        let s:macro_content = substitute(s:macro_content, '\V' .. escape(s:initial_typeahead, '\') .. '\$', '', '')
-        call s:Log('MacroStop', '', 'macro_content=' .. s:macro_content)
-    endif
-endfunction
-
-function s:MacroResume(handle) abort
-    if !empty(a:handle['init']['reg_recording'])
-        call setreg(tolower(a:handle['init']['reg_recording']), s:macro_content .. join(s:inputs['list'], ''))
-        execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
-    endif
-endfunction
-
-function s:MacroAbort(handle) abort
-    if !empty(a:handle['init']['reg_recording'])
-        call setreg(tolower(a:handle['init']['reg_recording']), s:macro_content)
-        execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
-    endif
-endfunction
-
-function s:SID() abort
-    " vim 8.1 compatible method
-    return matchstr(expand('<sfile>'), '<SNR>\zs\d\+\ze_SID$')
 endfunction
 
 function _op_#op#GetScriptVars() abort
