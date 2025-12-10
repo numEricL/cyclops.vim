@@ -7,7 +7,6 @@ set cpo&vim
 
 silent! call _op_#init#settings#Load()
 
-let s:macro_content = ''
 let s:Log = function('_op_#log#Log')
 
 function _op_#dot#InitCallback(handle) abort
@@ -97,11 +96,12 @@ function _op_#dot#RepeatCallback(dummy) abort
         call s:InitRepeatCallback(l:handle)
     endif
 
-    call s:MacroStop(l:handle)
     call inputsave()
+    let l:macro_content = _op_#utils#MacroStop('')
     if l:handle['opts']['accepts_count']
         let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:handle['repeat_mods'], l:handle['opts'])
         call s:RestoreRepeatEntry(l:handle)
+        call s:Log('dot#RepeatCallback', '', 'FEED_tx=' .. l:expr_with_modifiers)
         call _op_#utils#Feedkeys(l:expr_with_modifiers, 'tx')
     else
         let l:mods = extend({'count': 0}, l:handle['repeat_mods'], 'keep')
@@ -109,6 +109,7 @@ function _op_#dot#RepeatCallback(dummy) abort
         let l:count1 = max([1, l:handle['repeat_mods']['count']])
         for _ in range(l:count1)
             call s:RestoreRepeatEntry(l:handle)
+            call s:Log('dot#RepeatCallback', '', 'FEED_tx=' .. l:expr_with_modifiers)
             call _op_#utils#Feedkeys(l:expr_with_modifiers, 'tx')
             call s:InitRepeatCallback(l:handle)
         endfor
@@ -117,22 +118,8 @@ function _op_#dot#RepeatCallback(dummy) abort
     if exists("g:loaded_repeat")
         silent! call repeat#invalidate() " disable vim-repeat if present
     endif
+    call _op_#utils#MacroResume(l:handle['repeat']['reg_recording'], l:macro_content)
     call inputrestore()
-    call s:MacroResume(l:handle)
-endfunction
-
-function s:MacroStop(handle) abort
-    if a:handle['repeat']['reg_recording'] !=# ''
-        execute 'normal! q'
-        let s:macro_content = getreg(a:handle['repeat']['reg_recording'])
-    endif
-endfunction
-
-function s:MacroResume(handle) abort
-    if !empty(a:handle['repeat']['reg_recording'])
-        call setreg(tolower(a:handle['repeat']['reg_recording']), s:macro_content)
-        execute 'normal! q' .. toupper(a:handle['repeat']['reg_recording'])
-    endif
 endfunction
 
 function s:RestoreRepeatEntry(handle) abort

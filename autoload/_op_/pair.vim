@@ -7,6 +7,8 @@ set cpo&vim
 
 silent! call _op_#init#settings#Load()
 
+let s:Log = function('_op_#log#Log')
+
 function _op_#pair#Initcallback(handle, pair, dir) abort
     call extend(a:handle, { 'pair' : {
                 \ 'orig'      : a:pair,
@@ -42,6 +44,7 @@ function _op_#pair#PairRepeatMap(dir) abort
         let l:stack_handle = _op_#op#StackInit()
         call _op_#op#InitCallback(l:stack_handle, 'pair', l:stored_handle['pair']['orig'][l:id], l:stored_handle['opts'])
         let l:stack_handle['init']['input_source'] = 'cache'
+        let l:stack_handle['macro']['append_input'] = v:false
         let l:stack_handle['expr']['inputs'] = l:stored_handle['expr']['inputs']
         let l:stack_handle['pair'] = l:stored_handle['pair']
         let l:stack_handle['pair']['id'] = l:id
@@ -72,6 +75,7 @@ function _op_#pair#InitRepeatCallback(handle, dir) abort
                 \ 'init_id' : l:init_id,
                 \ 'id'      : l:id,
                 \ 'mode'    : mode(1),
+                \ 'reg_recording' : reg_recording(),
                 \ } } )
     call extend(a:handle, { 'repeat_mods': {
                 \ 'count'    : l:count,
@@ -83,9 +87,12 @@ function _op_#pair#RepeatCallback() abort
     let l:handle = _op_#op#GetStoredHandle('pair')
     call _op_#utils#RestoreVisual_COMPAT(l:handle)
     call inputsave()
+    let l:macro_content = _op_#utils#MacroStop('')
     let l:id = l:handle['repeat']['id']
     let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['pair']['reduced'][l:id], l:handle['repeat_mods'], l:handle['opts'])
+    call s:Log('pair#RepeatCallback', '', 'FEED_tx=' .. l:expr_with_modifiers)
     call _op_#utils#Feedkeys(l:expr_with_modifiers, 'tx')
+    call _op_#utils#MacroResume(l:handle['repeat']['reg_recording'], l:macro_content)
     call inputrestore()
 endfunction
 

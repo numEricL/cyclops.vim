@@ -10,6 +10,7 @@ let s:Log    = function('_op_#log#Log')
 let s:PModes = function('_op_#log#PModes')
 
 function _op_#utils#GetState() abort
+    call s:Log('GetState', '', _op_#stack#Top()['expr']['orig'])
     let l:state = {
                 \ 'winid'    : win_getid(),
                 \ 'win'      : winsaveview(),
@@ -152,6 +153,28 @@ function _op_#utils#QueueFinished(queue) abort
     call s:Log('QueueFinished', a:queue['id'] >= len(a:queue['list']), 'id=' . a:queue['id'] . ' len=' . len(a:queue['list']))
     return a:queue['id'] >= len(a:queue['list'])
 endfunction
+
+" removes typeahead that will be reinserted later
+function _op_#utils#MacroStop(typeahead) abort
+    let l:reg = reg_recording()
+    if !empty(l:reg)
+        execute 'normal! q'
+        let l:content = substitute(getreg(l:reg), '\V' .. escape(a:typeahead, '\') .. '\$', '', '')
+        call s:Log('MacroStop', '', 'macro_content=' .. l:content .. ' typeahead=' .. a:typeahead)
+        return l:content
+    else
+        return ''
+    endif
+endfunction
+
+function _op_#utils#MacroResume(reg, content) abort
+    if !empty(a:reg)
+        call setreg(tolower(a:reg), a:content)
+        call s:Log('MacroResume', '', 'macro_content=' .. a:content)
+        execute 'normal! q' .. toupper(a:reg)
+    endif
+endfunction
+
 
 let &cpo = s:cpo
 unlet s:cpo
