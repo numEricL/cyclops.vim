@@ -760,13 +760,22 @@ function s:MacroAbort(handle) abort
     endif
 endfunction
 
+function s:SID() abort
+    " vim 8.1 compatible method
+    return matchstr(expand('<sfile>'), '<SNR>\zs\d\+\ze_SID$')
+endfunction
+
 function _op_#op#GetScriptVars() abort
-    let l:sid = matchstr(expand('<SID>'), '\d\+')
-    return getscriptinfo({'sid': l:sid})[0]['variables']
+    if exists('*getscriptinfo')
+        let l:sid = s:SID()
+        return getscriptinfo({'sid': l:sid})[0]['variables']
+    else
+        return {'insert_mode_callback': s:insert_mode_callback}
+    endif
 endfunction
 
 function s:GetCharStr_COMPAT(...) abort
-    if has('*getcharstr')
+    if exists('*getcharstr')
         return a:0? getcharstr(a:1) : getcharstr()
     else
         let l:char = a:0? getchar(a:1) : getchar()
