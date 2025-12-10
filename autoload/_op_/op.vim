@@ -96,9 +96,10 @@ function _op_#op#ComputeMapCallback() abort range
     " if insert mode is reached during input hijacking, cyclops.vim unwinds the
     " stack and sets up a callback on InsertLeave to rebuild the stack and resume
     " processing with last change register content and any remaining typeahead.
-    if !s:insert_mode_callback['status']
-        let l:handle['state'] = _op_#utils#GetState()
-    endif
+
+    " The insert mode callback keeps the base stack handle, so we don't update
+    " state in that case
+    call extend(l:handle, { 'state' : _op_#utils#GetState() }, 'keep' )
 
     if _op_#stack#Depth() == 1
         try
@@ -757,6 +758,11 @@ function s:MacroAbort(handle) abort
         call setreg(tolower(a:handle['init']['reg_recording']), s:macro_content)
         execute 'normal! q' .. toupper(a:handle['init']['reg_recording'])
     endif
+endfunction
+
+function _op_#op#GetScriptVars() abort
+    let l:sid = matchstr(expand('<SID>'), '\d\+')
+    return getscriptinfo({'sid': l:sid})[0]['variables']
 endfunction
 
 function s:GetCharStr_COMPAT(...) abort

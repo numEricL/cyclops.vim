@@ -10,6 +10,7 @@ let s:Log    = function('_op_#log#Log')
 let s:PModes = function('_op_#log#PModes')
 
 function _op_#utils#GetState() abort
+    call s:Log('GetState', '', _op_#stack#Top()['expr']['orig'])
     let l:state = {
                 \ 'winid'    : win_getid(),
                 \ 'win'      : winsaveview(),
