@@ -140,7 +140,6 @@ function _op_#utils#QueueReset(queue) abort
 endfunction
 
 function _op_#utils#QueuePush(queue, item) abort
-    call s:Log('QueuePush', '', 'item=' . string(a:item) . ' id=' . a:queue['id'] . ' len=' . len(a:queue['list']))
     call add(a:queue['list'], a:item)
 endfunction
 

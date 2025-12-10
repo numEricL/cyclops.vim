@@ -130,8 +130,8 @@ function _op_#op#ComputeMapCallback() abort range
         if s:ModifiersNeeded(l:handle)
             call _op_#utils#RestoreState(l:handle['state'])
             let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:handle['mods'], l:handle['opts'], l:handle['expr']['op'])
-            call s:Log('EXIT', s:PModes(0), 'FEED_tx!=' .. l:expr_with_modifiers .. s:initial_typeahead)
-            call _op_#utils#Feedkeys(l:expr_with_modifiers, 'tx!')
+            call s:Log('EXIT', s:PModes(0), 'FEED_tx=' .. l:expr_with_modifiers .. s:initial_typeahead)
+            call _op_#utils#Feedkeys(l:expr_with_modifiers, 'tx')
         endif
         call s:MacroResume(l:handle)
         call _op_#utils#Feedkeys(s:initial_typeahead, 't')
@@ -163,8 +163,8 @@ function s:ComputeMapOnStack(handle) abort
         call s:ParentCallUpdate(a:handle)
 
         call _op_#utils#RestoreState(a:handle['state'])
-        call s:Log('ComputeMapOnStack', 'EXIT', 'FEED_tx!=' .. a:handle['expr']['op'] .. a:handle['expr']['reduced'])
-        call _op_#utils#Feedkeys(a:handle['expr']['op'] .. a:handle['expr']['reduced'], 'tx!')
+        call s:Log('ComputeMapOnStack', 'EXIT', 'FEED_tx=' .. a:handle['expr']['op'] .. a:handle['expr']['reduced'] .. ' typeahead=' .. s:ReadTypeaheadTruncated())
+        call _op_#utils#Feedkeys(a:handle['expr']['op'] .. a:handle['expr']['reduced'], 'tx')
         call inputrestore()
     endif
 endfunction
