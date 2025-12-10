@@ -10,7 +10,6 @@ let s:Log    = function('_op_#log#Log')
 let s:PModes = function('_op_#log#PModes')
 
 function _op_#utils#GetState() abort
-    call s:Log('GetState', '', _op_#stack#Top()['expr']['orig'])
     let l:state = {
                 \ 'winid'    : win_getid(),
                 \ 'win'      : winsaveview(),
@@ -22,7 +21,6 @@ function _op_#utils#GetState() abort
 endfunction
 
 function _op_#utils#RestoreState(state) abort
-    call s:Log('RestoreState', '', _op_#stack#Top()['expr']['orig'])
     call win_gotoid(a:state['winid'])
 
     let l:cur_bufnr = bufnr()

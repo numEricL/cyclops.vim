@@ -99,7 +99,9 @@ function _op_#op#ComputeMapCallback() abort range
 
     " The insert mode callback keeps the base stack handle, so we don't update
     " state in that case
-    call extend(l:handle, { 'state' : _op_#utils#GetState() }, 'keep' )
+    if !has_key(l:handle, 'state')
+        let l:handle['state'] = _op_#utils#GetState()
+    endif
 
     if _op_#stack#Depth() == 1
         try
