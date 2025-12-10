@@ -154,7 +154,7 @@ function _op_#utils#QueueFinished(queue) abort
     return a:queue['id'] >= len(a:queue['list'])
 endfunction
 
-" removes typeahead that will be reinserted when after resuming the macro
+" removes typeahead that will be reinserted later
 function _op_#utils#MacroStop(typeahead) abort
     let l:reg = reg_recording()
     if !empty(l:reg)

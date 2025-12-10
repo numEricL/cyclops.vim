@@ -74,7 +74,7 @@ function _op_#op#InitCallback(handle, handle_type, expr, opts) abort
     call extend(a:handle, {'macro' : {
                 \ 'reg_recording' : reg_recording(),
                 \ 'content'       : '',
-                \ 'append_input'  :v:true,
+                \ 'append_input'  : v:true,
                 \ } } )
     call extend(a:handle, { 'mods' : {
                 \ 'count'    : v:count,
