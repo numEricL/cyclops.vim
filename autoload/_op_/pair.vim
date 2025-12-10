@@ -85,7 +85,7 @@ function _op_#pair#RepeatCallback() abort
     call inputsave()
     let l:id = l:handle['repeat']['id']
     let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['pair']['reduced'][l:id], l:handle['repeat_mods'], l:handle['opts'])
-    call _op_#utils#Feedkeys(l:expr_with_modifiers, 'tx!')
+    call _op_#utils#Feedkeys(l:expr_with_modifiers, 'tx')
     call inputrestore()
 endfunction
 

@@ -96,7 +96,10 @@ function _op_#op#ComputeMapCallback() abort range
     " if insert mode is reached during input hijacking, cyclops.vim unwinds the
     " stack and sets up a callback on InsertLeave to rebuild the stack and resume
     " processing with last change register content and any remaining typeahead.
-    if !s:insert_mode_callback['status']
+
+    " The insert mode callback keeps the base stack handle, so we don't update
+    " state in that case
+    if !has_key(l:handle, 'state')
         let l:handle['state'] = _op_#utils#GetState()
     endif
 
@@ -130,8 +133,8 @@ function _op_#op#ComputeMapCallback() abort range
         if s:ModifiersNeeded(l:handle)
             call _op_#utils#RestoreState(l:handle['state'])
             let l:expr_with_modifiers = _op_#op#ExprWithModifiers(l:handle['expr']['reduced'], l:handle['mods'], l:handle['opts'], l:handle['expr']['op'])
-            call s:Log('EXIT', s:PModes(0), 'FEED_tx!=' .. l:expr_with_modifiers .. s:initial_typeahead)
-            call _op_#utils#Feedkeys(l:expr_with_modifiers, 'tx!')
+            call s:Log('EXIT', s:PModes(0), 'FEED_tx=' .. l:expr_with_modifiers .. s:initial_typeahead)
+            call _op_#utils#Feedkeys(l:expr_with_modifiers, 'tx')
         endif
         call s:MacroResume(l:handle)
         call _op_#utils#Feedkeys(s:initial_typeahead, 't')
@@ -163,8 +166,8 @@ function s:ComputeMapOnStack(handle) abort
         call s:ParentCallUpdate(a:handle)
 
         call _op_#utils#RestoreState(a:handle['state'])
-        call s:Log('ComputeMapOnStack', 'EXIT', 'FEED_tx!=' .. a:handle['expr']['op'] .. a:handle['expr']['reduced'])
-        call _op_#utils#Feedkeys(a:handle['expr']['op'] .. a:handle['expr']['reduced'], 'tx!')
+        call s:Log('ComputeMapOnStack', 'EXIT', 'FEED_tx=' .. a:handle['expr']['op'] .. a:handle['expr']['reduced'] .. ' typeahead=' .. s:ReadTypeaheadTruncated())
+        call _op_#utils#Feedkeys(a:handle['expr']['op'] .. a:handle['expr']['reduced'], 'tx')
         call inputrestore()
     endif
 endfunction
@@ -759,8 +762,22 @@ function s:MacroAbort(handle) abort
     endif
 endfunction
 
+function s:SID() abort
+    " vim 8.1 compatible method
+    return matchstr(expand('<sfile>'), '<SNR>\zs\d\+\ze_SID$')
+endfunction
+
+function _op_#op#GetScriptVars() abort
+    if exists('*getscriptinfo')
+        let l:sid = s:SID()
+        return getscriptinfo({'sid': l:sid})[0]['variables']
+    else
+        return {'insert_mode_callback': s:insert_mode_callback}
+    endif
+endfunction
+
 function s:GetCharStr_COMPAT(...) abort
-    if has('*getcharstr')
+    if exists('*getcharstr')
         return a:0? getcharstr(a:1) : getcharstr()
     else
         let l:char = a:0? getchar(a:1) : getchar()

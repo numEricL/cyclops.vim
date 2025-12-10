@@ -21,7 +21,6 @@ function _op_#utils#GetState() abort
 endfunction
 
 function _op_#utils#RestoreState(state) abort
-    call s:Log('RestoreState', '', _op_#stack#Top()['expr']['orig'])
     call win_gotoid(a:state['winid'])
 
     let l:cur_bufnr = bufnr()
@@ -140,7 +139,6 @@ function _op_#utils#QueueReset(queue) abort
 endfunction
 
 function _op_#utils#QueuePush(queue, item) abort
-    call s:Log('QueuePush', '', 'item=' . string(a:item) . ' id=' . a:queue['id'] . ' len=' . len(a:queue['list']))
     call add(a:queue['list'], a:item)
 endfunction
 
