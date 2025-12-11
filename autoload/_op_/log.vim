@@ -44,6 +44,7 @@ function _op_#log#PrintScriptVars() abort range
     echomsg ' '
     call s:PrintDict(_op_#op#GetScriptVars()['insert_mode_callback'], '[insert_mode_callback]')
     echomsg ' '
+    autocmd _op_#op#InsertMode
 endfunction
 
 function _op_#log#PrintDebugLog() abort

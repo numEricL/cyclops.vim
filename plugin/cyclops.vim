@@ -23,5 +23,8 @@ if !g:cyclops_no_mappings
     noremap <expr> T pair#NoremapPrev(['t', 'T'])
 endif
 
+augroup _op_#op#InsertMode
+augroup END
+
 let &cpo = s:cpo
 unlet s:cpo
