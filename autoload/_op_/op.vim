@@ -743,6 +743,11 @@ function _op_#op#GetProbe() abort
     return s:hijack_probe .. s:hijack_esc
 endfunction
 
+function s:SID() abort
+    " vim 8.1 compatible method
+    return matchstr(expand('<sfile>'), '<SNR>\zs\d\+\ze_SID$')
+endfunction
+
 function _op_#op#GetScriptVars() abort
     if exists('*getscriptinfo')
         let l:sid = s:SID()
