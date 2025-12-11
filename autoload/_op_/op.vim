@@ -32,7 +32,7 @@ let s:initial_typeahead = ''
 let s:inputs = { 'list': [], 'id': 0 }
 let s:operand = { 'expr': '', 'input': '' }
 let s:probe_exception = { 'status': v:false, 'expr': '', 'exception': '' }
-let s:insert_mode_callback = { 'status': v:false, 'char': '', 'input_stream': '', 'last_insert': '', 'typeahead': '', }
+let s:insert_mode_callback = { 'status': v:false, 'char': '', 'input_stream': '', 'last_insert': '', 'typeahead': '', 'abort': 0 }
 
 let s:handles = { 'op': {}, 'dot': {}, 'pair': {} }
 
@@ -52,7 +52,7 @@ function s:InitScriptVars()
     call extend(s:operand, { 'expr': '', 'input': '' } )
     call extend(s:hijack, { 'hmode': '', 'cmd': '', 'cmd_type': '' } ) " init early for s:Log
     call extend(s:probe_exception, { 'status': v:false, 'expr': '', 'exception': '' } )
-    call extend(s:insert_mode_callback, { 'status': v:false, 'char': '', 'input_stream': '', 'last_insert': '', 'typeahead': '', } )
+    call extend(s:insert_mode_callback, { 'status': v:false, 'char': '', 'input_stream': '', 'last_insert': '', 'typeahead': '', 'abort': 0 } )
     call _op_#utils#QueueReset(s:inputs)
 endfunction
 
@@ -310,6 +310,7 @@ function s:HijackUserInput(handle, input_stream) abort
                 augroup _op_#op#InsertMode
                     autocmd!
                     autocmd InsertLeave * call s:RestartFromInsertMode()
+                    autocmd InsertEnter * call s:AbortInsertMode()
                 augroup END
                 throw 'op#insert_callback'
             endif
@@ -353,6 +354,17 @@ function s:RestartFromInsertMode() abort
         else
             call _op_#op#Throw('Unsupported handle type in RestartFromInsertMode: ' .. string(l:handle['init']['handle_type']))
         endif
+    endif
+endfunction
+
+function s:AbortInsertMode() abort
+    " s:insert_mode_callback['abort'] counts the number of times InsertEnter is
+    " triggered. The first time is normal operation, the second time only occurs
+    " if the user interrupts insert mode (e.g. with <c-c>).
+    let s:insert_mode_callback['abort'] += 1
+    if s:insert_mode_callback['abort'] > 1
+        autocmd! _op_#op#InsertMode
+        call s:Log('AbortInsertMode', '', 'Insert mode aborted by user')
     endif
 endfunction
 
