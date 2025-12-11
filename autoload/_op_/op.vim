@@ -358,9 +358,9 @@ function s:RestartFromInsertMode() abort
 endfunction
 
 function s:AbortInsertMode() abort
-    " s:insert_mode_callback['abort'] counts the number of times InsertLeave is
-    " triggered. The first time is normal operation, the second time is if the
-    " user interrupts insert mode (e.g. with <c-c>).
+    " s:insert_mode_callback['abort'] counts the number of times InsertEnter is
+    " triggered. The first time is normal operation, the second time only occurs
+    " if the user interrupts insert mode (e.g. with <c-c>).
     let s:insert_mode_callback['abort'] += 1
     if s:insert_mode_callback['abort'] > 1
         autocmd! _op_#op#InsertMode
