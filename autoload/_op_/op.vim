@@ -92,19 +92,13 @@ endfunction
 
 function _op_#op#ComputeMapCallback() abort range
     let l:handle = _op_#stack#Top()
-    call _op_#utils#RestoreVisual_COMPAT(l:handle)
     call s:Log('ComputeMapCallback', s:PModes(2), 'expr=' .. l:handle['expr']['orig'] .. ' typeahead=' .. _op_#op#ReadTypeaheadTruncated())
+    call _op_#utils#RestoreVisual_COMPAT(l:handle)
+    let l:handle['state'] = _op_#utils#GetState()
 
     " if insert mode is reached during input hijacking, cyclops.vim unwinds the
     " stack and sets up a callback on InsertLeave to rebuild the stack and resume
     " processing with last change register content and any remaining typeahead.
-
-    " The insert mode callback keeps the base stack handle, so we don't update
-    " state in that case
-    if !has_key(l:handle, 'state')
-        let l:handle['state'] = _op_#utils#GetState()
-    endif
-
     if _op_#stack#Depth() == 1
         try
             if !s:insert_mode_callback['status']
@@ -345,6 +339,7 @@ function s:RestartFromInsertMode() abort
         let l:handle['expr']['reduced'] = l:handle['expr']['orig']
         let l:handle['expr']['reduced_so_far'] = ''
 
+        call _op_#utils#RestoreState(l:handle['state'])
         if l:handle['init']['handle_type'] ==# 'op'
             call _op_#op#ComputeMapCallback()
         elseif l:handle['init']['handle_type'] ==# 'dot'
