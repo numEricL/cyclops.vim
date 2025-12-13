@@ -144,32 +144,39 @@ function _op_#op#ComputeMapCallback() abort range
     return 'op#success'
 endfunction
 
+" Nested op#map calls results in recursion and is managed by a stack.
+" Recursion typically happens at this ProbeExpr call, but can also
+" happen in HijackInput if a registered omap is triggered. When
+" recursion happens, callee's update the caller's reduced expr, removing
+" the recursion in subsequent calls.
 function s:ComputeMapOnStack(handle) abort
     if _op_#stack#Depth() == 1
-        " Nested op#map calls results in recursion and is managed by a stack.
-        " Recursion typically happens at this ProbeExpr call, but can also
-        " happen in HijackInput if a registered omap is triggered. When
-        " recursion happens, callee's update the caller's reduced expr, removing
-        " the recursion in subsequent calls.
-        call s:ProbeExpr(a:handle['expr']['op'] .. a:handle['expr']['orig'], 'expr_orig')
-        let l:input = s:HijackInput(a:handle)
-        call s:CheckForProbeErrors()
-        call s:StoreInput(a:handle, l:input)
+        if a:handle['opts']['accepts_input']
+            call s:ProbeExpr(a:handle['expr']['op'] .. a:handle['expr']['orig'], 'expr_orig')
+            let l:input = s:HijackInput(a:handle)
+            call s:CheckForProbeErrors()
+            call s:StoreInput(a:handle, l:input)
+        endif
     else
-        call s:ParentCallInit(a:handle)
-        call inputsave()
+        if a:handle['opts']['accepts_input']
+            call s:ParentCallInit(a:handle)
+            call inputsave()
 
-        call _op_#utils#RestoreState(a:handle['state'])
-        call s:ProbeExpr(a:handle['expr']['op'] .. a:handle['expr']['orig'], 'expr_orig')
-        let l:input = s:HijackInput(a:handle)
-        call s:CheckForProbeErrors()
-        call s:StoreInput(a:handle, l:input)
-        call s:ParentCallUpdate(a:handle)
+            call _op_#utils#RestoreState(a:handle['state'])
+            call s:ProbeExpr(a:handle['expr']['op'] .. a:handle['expr']['orig'], 'expr_orig')
+            let l:input = s:HijackInput(a:handle)
+            call s:CheckForProbeErrors()
+            call s:StoreInput(a:handle, l:input)
+            call s:ParentCallUpdate(a:handle)
 
-        call _op_#utils#RestoreState(a:handle['state'])
-        call s:Log('ComputeMapOnStack', 'EXIT', 'FEED_tx=' .. a:handle['expr']['op'] .. a:handle['expr']['reduced'] .. ' typeahead=' .. _op_#op#ReadTypeaheadTruncated())
-        call _op_#utils#Feedkeys(a:handle['expr']['op'] .. a:handle['expr']['reduced'], 'tx')
-        call inputrestore()
+            call _op_#utils#RestoreState(a:handle['state'])
+            call s:Log('ComputeMapOnStack', 'EXIT', 'FEED_tx=' .. a:handle['expr']['op'] .. a:handle['expr']['reduced'] .. ' typeahead=' .. _op_#op#ReadTypeaheadTruncated())
+            call _op_#utils#Feedkeys(a:handle['expr']['op'] .. a:handle['expr']['reduced'], 'tx')
+            call inputrestore()
+        else
+            call s:ParentCallInit(a:handle)
+            call s:ParentCallUpdate(a:handle)
+        endif
     endif
 endfunction
 
@@ -693,6 +700,9 @@ function s:ModifiersNeeded(handle) abort
     " This is not necessary if we know the probe will not be consumed, so
     " further optimization is possible.
     if s:hijack['hmode']  !=# 'n'
+        return v:true
+    endif
+    if !a:handle['opts']['accepts_input']
         return v:true
     endif
     if a:handle['opts']['accepts_count'] && a:handle['mods']['count'] != 0
