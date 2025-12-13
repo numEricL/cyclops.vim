@@ -244,8 +244,11 @@ op#SetMap({mapping_type}, {map} [, {opts}])                     *op#SetMap()*
     See autoload/_op_/init/settings.vim for available options.
 
     Available options:~
-        accepts_register  - Whether mapping accepts a register (default: 1)
-        accepts_count     - Whether mapping accepts a count (default: 1)
+        accepts_register   - Whether mapping accepts a register (default: 1)
+        accepts_count      - Whether mapping accepts a count (default: 1)
+        accepts_input      - Whether mapping accepts user input (default: 1)
+        persistent_count   - Whether to persist count across repeats (default: 0)
+        absolute_direction - Use absolute direction for pair repeat (default: 0)
 
     Example: >
         let g:cyclops_map_defaults = {'accepts_register': 0}
@@ -255,15 +258,31 @@ Function Options~
     The optional {opts} parameter in cyclops functions is a dictionary that
     can contain:
 
-    accepts_register    Boolean (0 or 1). Whether the mapping accepts a
+    accepts_register   Boolean (0 or 1). Whether the mapping accepts a
                        register. Default: 1
 
     accepts_count      Boolean (0 or 1). Whether the mapping accepts a count.
                        If set to 0 but a count is provided, the mapping is
                        literally repeated count times. Default: 1
 
+    accepts_input      Boolean (0 or 1). Whether the mapping accepts user
+                       input. If set to 0, cyclops.vim will not probe for user
+                       input. This avoids unnecessary computation but does not
+                       support nested mappings. Default: 1
+
+    persistent_count   Boolean (0 or 1). Whether to persist the count from the
+                       initial invocation when repeating with |.| or |;| |,|
+                       without a new count. When enabled, repeating without a
+                       count reuses the original count. Default: 0
+
+    absolute_direction Boolean (0 or 1). For pair mappings, use absolute
+                       direction instead of relative direction. When enabled,
+                       |;| always executes the first mapping in the pair and
+                       |,| always executes the second, regardless of which was
+                       originally invoked. Default: 0
+
     Example: >
-        {'accepts_register': 0, 'accepts_count': 0}
+    let g:cyclops_map_defaults = {'persistent_count': 1, 'absolute_direction': 1}
 <
 
 ==============================================================================

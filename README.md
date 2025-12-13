@@ -53,6 +53,23 @@ default it is assumed that mappings accept registers and counts. If a mapping is
 specified to not accept a count but a count is provided anyway, cyclops.vim
 repeats the mapping literally count times.
 
+## Configuration
+
+Configuration options can be passed to any cyclops function via an options
+dictionary, or set globally by defining `g:cyclops_map_defaults`. By default,
+mappings accept registers, counts, and user input.
+
+Notable options include:
+
+* `persistent_count` - Persist the original count when repeating without a new
+  count. When enabled, pressing `.` or `;` `,` without a count will reuse the
+  count from the initial invocation.
+* `absolute_direction` - Make `;` and `,` use absolute rather than relative
+  direction for pair mappings. When enabled, `;` always executes the first
+  mapping in the pair and `,` always executes the second.
+
+See `:help cyclops-config` for complete configuration options and defaults.
+
 ## Why not a related plugin?
 
 Another plugin for repeating mappings may have one or more of the following
