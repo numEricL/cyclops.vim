@@ -248,12 +248,6 @@ op#SetMap({mapping_type}, {map} [, {opts}])                     *op#SetMap()*
         accepts_count     - Whether mapping accepts a count (default: 1)
         accepts_input     - Whether mapping accepts user input (default: 1)
 
-    If accepts_count is set to 0 but a count is provided, cyclops.vim will
-    repeat the mapping literally count times.
-
-    If accepts_input is set to 0 cyclops.vim will not probe for user input. This
-    avoids unnecessary computation but does not support nested mappings.
-
     Example: >
         let g:cyclops_map_defaults = {'accepts_register': 0}
 <
@@ -262,12 +256,17 @@ Function Options~
     The optional {opts} parameter in cyclops functions is a dictionary that
     can contain:
 
-    accepts_register    Boolean (0 or 1). Whether the mapping accepts a
+    accepts_register   Boolean (0 or 1). Whether the mapping accepts a
                        register. Default: 1
 
     accepts_count      Boolean (0 or 1). Whether the mapping accepts a count.
                        If set to 0 but a count is provided, the mapping is
                        literally repeated count times. Default: 1
+
+    accepts_input      Boolean (0 or 1). Whether the mapping accepts user
+                       input. If set to 0, cyclops.vim will not probe for user
+                       input. This avoids unnecessary computation but does not
+                       support nested mappings. Default: 1
 
     Example: >
         {'accepts_register': 0, 'accepts_count': 0}
